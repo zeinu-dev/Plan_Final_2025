@@ -27,7 +27,6 @@ const EvaluatorDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [organizationsMap, setOrganizationsMap] = useState<Record<string, string>>({});
   const [activeTab, setActiveTab] = useState<'pending' | 'reviewed'>('pending');
   const [budgetData, setBudgetData] = useState<any>({
     labels: [],
@@ -72,30 +71,6 @@ const EvaluatorDashboard: React.FC = () => {
     checkPermissions();
   }, [navigate]);
 
-  // Fetch all organizations to map IDs to names
-  useEffect(() => {
-    const fetchOrganizations = async () => {
-      try {
-        const response = await organizations.getAll();
-        const orgMap: Record<string, string> = {};
-        
-        if (response && Array.isArray(response)) {
-          response.forEach((org: any) => {
-            if (org && org.id) {
-              orgMap[org.id] = org.name;
-            }
-          });
-        }
-        
-        setOrganizationsMap(orgMap);
-        console.log('Organizations map created:', orgMap);
-      } catch (error) {
-        console.error('Failed to fetch organizations:', error);
-      }
-    };
-    
-    fetchOrganizations();
-  }, []);
 
   // Fetch pending plans for review (filtered by evaluator's organizations)
   const { data: pendingPlans, isLoading, refetch } = useQuery({
@@ -104,37 +79,18 @@ const EvaluatorDashboard: React.FC = () => {
       console.log('Fetching pending plans for evaluator organizations:', userOrgIds);
       try {
         await auth.getCurrentUser();
-        
-        // Get ONLY submitted plans for evaluator's organizations
+
         const response = await api.get('/plans/', {
           params: {
             status: 'SUBMITTED',
             organization__in: userOrgIds.join(',')
           }
         });
-        
-        console.log('Pending plans response for evaluator:', response.data?.length || 0);
-        
+
         const plans = response.data?.results || response.data || [];
-        
-        // Plans are already filtered by organization at API level
-        const filteredPlans = plans.filter(plan => 
-          plan.status === 'SUBMITTED' && 
-          userOrgIds.includes(Number(plan.organization))
-        );
-        
-        console.log(`Filtered ${plans.length} total plans to ${filteredPlans.length} for evaluator orgs:`, userOrgIds);
-        
-        // Map organization names
-        if (Array.isArray(filteredPlans)) {
-          filteredPlans.forEach((plan: any) => {
-            if (plan.organization && organizationsMap[plan.organization]) {
-              plan.organizationName = organizationsMap[plan.organization];
-            }
-          });
-        }
-        
-        return { data: filteredPlans };
+        console.log(`Loaded ${plans.length} pending plans`);
+
+        return { data: plans };
       } catch (error) {
         console.error('Error fetching pending reviews:', error);
         throw error;
@@ -142,8 +98,8 @@ const EvaluatorDashboard: React.FC = () => {
     },
     enabled: userOrgIds.length > 0,
     retry: 2,
-    refetchInterval: 30000,
-    refetchOnWindowFocus: true
+    staleTime: 60000,
+    refetchOnWindowFocus: false
   });
 
   // Fetch reviewed plans (approved/rejected) for evaluator's organizations
@@ -153,44 +109,27 @@ const EvaluatorDashboard: React.FC = () => {
       console.log('Fetching reviewed plans for evaluator organizations:', userOrgIds);
       try {
         await auth.getCurrentUser();
-        
-        // Get ONLY approved and rejected plans for evaluator's organizations
+
         const response = await api.get('/plans/', {
           params: {
             status__in: 'APPROVED,REJECTED',
             organization__in: userOrgIds.join(',')
           }
         });
-        
-        console.log('Reviewed plans response for evaluator:', response.data?.length || 0);
-        
+
         const plans = response.data?.results || response.data || [];
-        
-        // Filter to ensure only approved/rejected plans from evaluator's organizations
-        const filteredPlans = plans.filter(plan => 
-          ['APPROVED', 'REJECTED'].includes(plan.status) &&
-          userOrgIds.includes(Number(plan.organization))
-        );
-        
-        console.log(`Filtered ${plans.length} total plans to ${filteredPlans.length} reviewed plans for evaluator orgs:`, userOrgIds);
-        
-        // Map organization names
-        if (Array.isArray(filteredPlans)) {
-          filteredPlans.forEach((plan: any) => {
-            if (plan.organization && organizationsMap[plan.organization]) {
-              plan.organizationName = organizationsMap[plan.organization];
-            }
-          });
-        }
-        
-        return { data: filteredPlans };
+        console.log(`Loaded ${plans.length} reviewed plans`);
+
+        return { data: plans };
       } catch (error) {
         console.error('Error fetching reviewed plans:', error);
         throw error;
       }
     },
-    enabled: userOrgIds.length > 0,
-    retry: 2
+    enabled: userOrgIds.length > 0 && activeTab === 'reviewed',
+    retry: 2,
+    staleTime: 60000,
+    refetchOnWindowFocus: false
   });
 
   // Manual refresh function
@@ -355,22 +294,9 @@ const EvaluatorDashboard: React.FC = () => {
     }
   };
 
-  // Helper function to get organization name from map or plan
+  // Helper function to get organization name from plan
   const getOrganizationName = (plan: any) => {
-    if (plan.organizationName) {
-      return plan.organizationName;
-    }
-    
-    if (plan.organization_name) {
-      return plan.organization_name;
-    }
-    
-    // Try to get organization name from our map
-    if (plan.organization && organizationsMap[plan.organization]) {
-      return organizationsMap[plan.organization];
-    }
-    
-    return 'Unknown Organization';
+    return plan.organization_name || plan.organizationName || 'Unknown Organization';
   };
 
   // Calculate summary statistics from evaluator's data
