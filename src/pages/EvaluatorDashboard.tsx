@@ -202,6 +202,7 @@ const EvaluatorDashboard: React.FC = () => {
     onSuccess: () => {
       console.log('Review submitted successfully, refreshing data...');
       queryClient.invalidateQueries({ queryKey: ['plans', 'pending-reviews'] });
+      queryClient.invalidateQueries({ queryKey: ['plans', 'reviewed'] });
       queryClient.invalidateQueries({ queryKey: ['plans', 'all'] });
       setShowReviewModal(false);
       setSelectedPlan(null);
