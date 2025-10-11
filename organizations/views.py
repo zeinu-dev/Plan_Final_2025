@@ -1367,19 +1367,40 @@ class PlanViewSet(viewsets.ModelViewSet):
 
         logger.info(f"User {user.username} roles: {list(user_roles)}, orgs: {list(user_org_ids)}")
 
+        # Apply query parameter filters
+        status_param = self.request.query_params.get('status')
+        status_in_param = self.request.query_params.get('status__in')
+        org_in_param = self.request.query_params.get('organization__in')
+
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+            logger.info(f"Filtering by status: {status_param}")
+
+        if status_in_param:
+            statuses = [s.strip() for s in status_in_param.split(',')]
+            queryset = queryset.filter(status__in=statuses)
+            logger.info(f"Filtering by statuses: {statuses}")
+
+        if org_in_param:
+            org_ids = [int(o.strip()) for o in org_in_param.split(',') if o.strip().isdigit()]
+            queryset = queryset.filter(organization__in=org_ids)
+            logger.info(f"Filtering by organizations: {org_ids}")
+
         # Admins can see all plans
         if 'ADMIN' in user_roles:
             logger.info(f"Admin {user.username} accessing all plans")
             return queryset
 
-        # Evaluators can see all plans for review purposes
+        # Evaluators can see plans from their organizations
         if 'EVALUATOR' in user_roles:
             if show_all:
                 logger.info(f"Evaluator {user.username} accessing all plans for statistics")
                 return queryset
             else:
-                # For individual plan access, evaluators can see all plans
-                logger.info(f"Evaluator {user.username} accessing all plans for review")
+                # Filter by evaluator's organizations unless already filtered
+                if not org_in_param:
+                    queryset = queryset.filter(organization__in=user_org_ids)
+                logger.info(f"Evaluator {user.username} accessing plans from their organizations")
                 return queryset
 
         # Planners can only see plans from their own organizations
