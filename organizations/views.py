@@ -20,7 +20,8 @@ from .models import (
     ActivityBudget, SubActivity, ActivityCostingAssumption,InitiativeFeed,
     Plan, PlanReview,Location, LandTransport, AirTransport,
     PerDiem, Accommodation, ParticipantCost, SessionCost,
-    PrintingCost, SupervisorCost, ProcurementItem
+    PrintingCost, SupervisorCost, ProcurementItem, Report,
+    PerformanceAchievement, ActivityAchievement
 )
 from .serializers import (
     OrganizationSerializer, OrganizationUserSerializer, UserSerializer,
@@ -30,7 +31,8 @@ from .serializers import (
     PlanSerializer, PlanReviewSerializer,LocationSerializer, LandTransportSerializer,
     AirTransportSerializer, PerDiemSerializer, AccommodationSerializer,
     ParticipantCostSerializer, SessionCostSerializer, PrintingCostSerializer,
-    SupervisorCostSerializer,ProcurementItemSerializer
+    SupervisorCostSerializer,ProcurementItemSerializer, ReportSerializer,
+    PerformanceAchievementSerializer, ActivityAchievementSerializer
 )
 
 # Set up logger
@@ -1737,4 +1739,207 @@ class ProcurementItemViewSet(viewsets.ReadOnlyModelViewSet):
         category = self.request.query_params.get('category', None)
         if category is not None:
             queryset = queryset.filter(category=category)
+        return queryset
+
+
+class ReportViewSet(viewsets.ModelViewSet):
+    queryset = Report.objects.all().select_related('plan', 'organization', 'planner').prefetch_related('performance_achievements', 'activity_achievements')
+    serializer_class = ReportSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+
+        user_organizations = OrganizationUser.objects.filter(user=user)
+        if not user_organizations.exists():
+            return queryset.none()
+
+        user_roles = user_organizations.values_list('role', flat=True)
+        user_org_ids = user_organizations.values_list('organization', flat=True)
+
+        if 'ADMIN' in user_roles:
+            return queryset
+
+        return queryset.filter(organization__in=user_org_ids)
+
+    def create(self, request, *args, **kwargs):
+        try:
+            plan_id = request.data.get('plan')
+            report_type = request.data.get('report_type')
+
+            if not plan_id or not report_type:
+                return Response({'error': 'Plan and report type are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            plan = Plan.objects.get(id=plan_id)
+
+            if plan.status != 'APPROVED':
+                return Response({'error': 'Can only create reports for approved plans'}, status=status.HTTP_400_BAD_REQUEST)
+
+            from datetime import date, timedelta
+            from dateutil.relativedelta import relativedelta
+
+            current_date = date.today()
+            plan_start = plan.from_date
+            report_period_end = None
+
+            if report_type == 'Q1':
+                report_period_end = plan_start + relativedelta(months=3)
+            elif report_type == 'Q2':
+                report_period_end = plan_start + relativedelta(months=6)
+            elif report_type == '6M':
+                report_period_end = plan_start + relativedelta(months=6)
+            elif report_type == 'Q3':
+                report_period_end = plan_start + relativedelta(months=9)
+            elif report_type == '9M':
+                report_period_end = plan_start + relativedelta(months=9)
+            elif report_type == 'Q4':
+                report_period_end = plan_start + relativedelta(months=12)
+            elif report_type == 'YEARLY':
+                report_period_end = plan.to_date
+
+            if report_period_end and current_date < report_period_end:
+                return Response({
+                    'error': f'Report period has not ended yet. Please wait until {report_period_end.strftime("%Y-%m-%d")}',
+                    'report_period_end': report_period_end.strftime("%Y-%m-%d")
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            request.data['organization'] = plan.organization.id
+            request.data['planner'] = request.user.id
+
+            return super().create(request, *args, **kwargs)
+
+        except Plan.DoesNotExist:
+            return Response({'error': 'Plan not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception("Error creating report")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['post'])
+    def submit(self, request, pk=None):
+        try:
+            report = self.get_object()
+
+            if report.submitted_at:
+                return Response({'error': 'Report already submitted'}, status=status.HTTP_400_BAD_REQUEST)
+
+            report.submitted_at = timezone.now()
+            report.save()
+
+            return Response({'message': 'Report submitted successfully'}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("Error submitting report")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['get'])
+    def plan_data(self, request, pk=None):
+        try:
+            report = self.get_object()
+            plan = report.plan
+            report_type = report.report_type
+
+            objectives = plan.selected_objectives.all()
+            plan_data = []
+
+            for objective in objectives:
+                initiatives = objective.initiatives.filter(organization=plan.organization)
+
+                for initiative in initiatives:
+                    measures = initiative.performance_measures.filter(organization=plan.organization)
+                    activities = initiative.main_activities.filter(organization=plan.organization)
+
+                    initiative_data = {
+                        'objective_id': objective.id,
+                        'objective_title': objective.title,
+                        'objective_weight': float(plan.selected_objectives_weights.get(str(objective.id), 0)) if plan.selected_objectives_weights else 0,
+                        'initiative_id': initiative.id,
+                        'initiative_name': initiative.name,
+                        'initiative_weight': float(initiative.weight or 0),
+                        'performance_measures': [],
+                        'main_activities': []
+                    }
+
+                    for measure in measures:
+                        target = self._get_target_for_period(measure, report_type)
+                        if target is not None:
+                            initiative_data['performance_measures'].append({
+                                'id': measure.id,
+                                'name': measure.name,
+                                'weight': float(measure.weight or 0),
+                                'target': float(target),
+                                'target_type': measure.target_type
+                            })
+
+                    for activity in activities:
+                        target = self._get_target_for_period(activity, report_type)
+                        if target is not None:
+                            initiative_data['main_activities'].append({
+                                'id': activity.id,
+                                'name': activity.name,
+                                'weight': float(activity.weight or 0),
+                                'target': float(target),
+                                'target_type': activity.target_type
+                            })
+
+                    if initiative_data['performance_measures'] or initiative_data['main_activities']:
+                        plan_data.append(initiative_data)
+
+            return Response({'plan_data': plan_data}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("Error fetching plan data for report")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _get_target_for_period(self, obj, report_type):
+        if obj.target_type == 'QUARTERLY':
+            if report_type == 'Q1':
+                return obj.q1_target
+            elif report_type in ['Q2', '6M']:
+                return obj.q2_target
+            elif report_type in ['Q3', '9M']:
+                return obj.q3_target
+            elif report_type in ['Q4', 'YEARLY']:
+                return obj.q4_target
+        elif obj.target_type == 'MONTHLY':
+            months_mapping = {
+                'Q1': obj.selected_months[:3] if obj.selected_months else [],
+                'Q2': obj.selected_months[3:6] if obj.selected_months else [],
+                '6M': obj.selected_months[:6] if obj.selected_months else [],
+                'Q3': obj.selected_months[6:9] if obj.selected_months else [],
+                '9M': obj.selected_months[:9] if obj.selected_months else [],
+                'Q4': obj.selected_months[9:] if obj.selected_months else [],
+                'YEARLY': obj.selected_months if obj.selected_months else []
+            }
+            selected = months_mapping.get(report_type, [])
+            return sum(selected) if selected else None
+        elif obj.target_type == 'ANNUAL':
+            if report_type == 'YEARLY':
+                return obj.annual_target
+        return None
+
+
+class PerformanceAchievementViewSet(viewsets.ModelViewSet):
+    queryset = PerformanceAchievement.objects.all().select_related('report', 'performance_measure')
+    serializer_class = PerformanceAchievementSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        report_id = self.request.query_params.get('report', None)
+        if report_id:
+            queryset = queryset.filter(report_id=report_id)
+        return queryset
+
+
+class ActivityAchievementViewSet(viewsets.ModelViewSet):
+    queryset = ActivityAchievement.objects.all().select_related('report', 'main_activity')
+    serializer_class = ActivityAchievementSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        report_id = self.request.query_params.get('report', None)
+        if report_id:
+            queryset = queryset.filter(report_id=report_id)
         return queryset

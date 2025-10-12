@@ -516,13 +516,24 @@ const PlansTable: React.FC<PlansTableProps> = ({ onCreateNewPlan, userOrgId }) =
                       {formatDate(plan.submitted_at)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => handleViewPlan(plan)}
-                        className="text-blue-600 hover:text-blue-900 flex items-center"
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        View
-                      </button>
+                      <div className="flex items-center justify-end space-x-3">
+                        <button
+                          onClick={() => handleViewPlan(plan)}
+                          className="text-blue-600 hover:text-blue-900 flex items-center"
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          View
+                        </button>
+                        {plan.status === 'APPROVED' && (
+                          <button
+                            onClick={() => navigate(`/reporting?plan=${plan.id}`)}
+                            className="text-green-600 hover:text-green-900 flex items-center"
+                          >
+                            <FileSpreadsheet className="h-4 w-4 mr-1" />
+                            Report
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

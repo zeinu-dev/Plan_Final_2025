@@ -1270,3 +1270,112 @@ class PlanReview(models.Model):
     
     def __str__(self):
         return f"Review of {self.plan} by {self.evaluator.user.username}" if self.evaluator else f"Review of {self.plan}"
+
+
+class Report(models.Model):
+    REPORT_TYPES = [
+        ('Q1', 'Quarter 1 Report'),
+        ('Q2', 'Quarter 2 Report'),
+        ('6M', '6 Month Report'),
+        ('Q3', 'Quarter 3 Report'),
+        ('9M', '9 Month Report'),
+        ('Q4', 'Quarter 4 Report'),
+        ('YEARLY', 'Yearly Report')
+    ]
+
+    plan = models.ForeignKey(
+        Plan,
+        on_delete=models.CASCADE,
+        related_name='reports'
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='reports'
+    )
+    planner = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='reports'
+    )
+    report_type = models.CharField(max_length=10, choices=REPORT_TYPES)
+    report_date = models.DateField(default=timezone.now)
+    narrative_report = models.FileField(upload_to='narrative_reports/', null=True, blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('plan', 'report_type')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.organization.name} - {self.get_report_type_display()} - {self.report_date}"
+
+    def clean(self):
+        super().clean()
+
+        if not self.plan or self.plan.status != 'APPROVED':
+            raise ValidationError('Can only create reports for approved plans')
+
+        if self.plan.organization != self.organization:
+            raise ValidationError('Report organization must match plan organization')
+
+
+class PerformanceAchievement(models.Model):
+    report = models.ForeignKey(
+        Report,
+        on_delete=models.CASCADE,
+        related_name='performance_achievements'
+    )
+    performance_measure = models.ForeignKey(
+        PerformanceMeasure,
+        on_delete=models.CASCADE,
+        related_name='achievements'
+    )
+    achievement = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Actual achievement for the reporting period"
+    )
+    justification = models.TextField(
+        help_text="Justification or explanation for the achievement"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('report', 'performance_measure')
+
+    def __str__(self):
+        return f"{self.performance_measure.name} - {self.achievement}"
+
+
+class ActivityAchievement(models.Model):
+    report = models.ForeignKey(
+        Report,
+        on_delete=models.CASCADE,
+        related_name='activity_achievements'
+    )
+    main_activity = models.ForeignKey(
+        MainActivity,
+        on_delete=models.CASCADE,
+        related_name='achievements'
+    )
+    achievement = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Actual achievement for the reporting period"
+    )
+    justification = models.TextField(
+        help_text="Justification or explanation for the achievement"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('report', 'main_activity')
+
+    def __str__(self):
+        return f"{self.main_activity.name} - {self.achievement}"

@@ -1,11 +1,12 @@
 from django.contrib import admin
 from django import forms
 from .models import (
-    Organization, OrganizationUser, StrategicObjective, 
+    Organization, OrganizationUser, StrategicObjective,
     Program, StrategicInitiative, PerformanceMeasure, MainActivity,
     ActivityBudget, ActivityCostingAssumption, InitiativeFeed,
     Location, LandTransport, AirTransport, PerDiem, Accommodation,
-    ParticipantCost, SessionCost, PrintingCost, SupervisorCost,ProcurementItem,Plan,SubActivity
+    ParticipantCost, SessionCost, PrintingCost, SupervisorCost,ProcurementItem,Plan,SubActivity,
+    Report, PerformanceAchievement, ActivityAchievement
 )
 admin.site.register(Plan)
 class OrganizationAdminForm(forms.ModelForm):
@@ -232,33 +233,24 @@ class ProcurementItemAdmin(admin.ModelAdmin):
     )
 admin.site.register(SubActivity)
 
-list_display = ('name', 'main_activity', 'activity_type')
-list_filter = ('main_activity', 'activity_type')
-search_fields = ('name',)
-ordering = ('main_activity', 'name')
-fieldsets = (
-        (None, {
-            'fields': ('name', 'main_activity', 'activity_type')
-        }),
-         ('Costs', {
-            'fields': (
-                'estimated_cost_with_tool',
-                'estimated_cost_without_tool',
-                'government_treasury',
-                'sdg_funding',
-                'partners_funding',
-                'other_funding'
-            ),
-        }),
-        ('Activity Details', {
-            'fields': (
-                'training_details',
-                'meeting_workshop_details',
-                'procurement_details',
-                'printing_details',
-                'supervision_details',
-                'partners_details'
-            ),
-            'classes': ('collapse',),
-        }),
-    )
+@admin.register(Report)
+class ReportAdmin(admin.ModelAdmin):
+    list_display = ('organization', 'report_type', 'report_date', 'planner', 'submitted_at', 'created_at')
+    list_filter = ('report_type', 'organization', 'submitted_at')
+    search_fields = ('organization__name', 'planner__username')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at', 'updated_at')
+
+@admin.register(PerformanceAchievement)
+class PerformanceAchievementAdmin(admin.ModelAdmin):
+    list_display = ('performance_measure', 'report', 'achievement', 'created_at')
+    list_filter = ('report__report_type', 'report__organization')
+    search_fields = ('performance_measure__name',)
+    ordering = ('-created_at',)
+
+@admin.register(ActivityAchievement)
+class ActivityAchievementAdmin(admin.ModelAdmin):
+    list_display = ('main_activity', 'report', 'achievement', 'created_at')
+    list_filter = ('report__report_type', 'report__organization')
+    search_fields = ('main_activity__name',)
+    ordering = ('-created_at',)

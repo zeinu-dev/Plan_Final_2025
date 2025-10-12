@@ -9,7 +9,8 @@ from .models import (
     ActivityBudget, ActivityCostingAssumption, InitiativeFeed,
     Location, LandTransport, AirTransport, PerDiem, Accommodation,
     ParticipantCost, SessionCost, PrintingCost, SupervisorCost,
-    ProcurementItem, Plan, PlanReview, SubActivity
+    ProcurementItem, Plan, PlanReview, SubActivity, Report,
+    PerformanceAchievement, ActivityAchievement
 )
 from decimal import Decimal, InvalidOperation
 import json
@@ -686,3 +687,46 @@ class PasswordChangeSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError('Current password is incorrect.')
         return value
+
+class PerformanceAchievementSerializer(serializers.ModelSerializer):
+    performance_measure_name = serializers.CharField(source='performance_measure.name', read_only=True)
+
+    class Meta:
+        model = PerformanceAchievement
+        fields = ['id', 'report', 'performance_measure', 'performance_measure_name', 'achievement', 'justification', 'created_at', 'updated_at']
+
+class ActivityAchievementSerializer(serializers.ModelSerializer):
+    main_activity_name = serializers.CharField(source='main_activity.name', read_only=True)
+
+    class Meta:
+        model = ActivityAchievement
+        fields = ['id', 'report', 'main_activity', 'main_activity_name', 'achievement', 'justification', 'created_at', 'updated_at']
+
+class ReportSerializer(serializers.ModelSerializer):
+    organization_name = serializers.CharField(source='organization.name', read_only=True)
+    planner_name = serializers.SerializerMethodField()
+    report_type_display = serializers.CharField(source='get_report_type_display', read_only=True)
+    performance_achievements = PerformanceAchievementSerializer(many=True, read_only=True)
+    activity_achievements = ActivityAchievementSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Report
+        fields = [
+            'id', 'plan', 'organization', 'organization_name', 'planner', 'planner_name',
+            'report_type', 'report_type_display', 'report_date', 'narrative_report',
+            'submitted_at', 'performance_achievements', 'activity_achievements',
+            'created_at', 'updated_at'
+        ]
+
+    def get_planner_name(self, obj):
+        if obj.planner:
+            return f"{obj.planner.first_name} {obj.planner.last_name}".strip() or obj.planner.username
+        return "Unknown"
+
+    def validate(self, data):
+        plan = data.get('plan')
+
+        if plan and plan.status != 'APPROVED':
+            raise serializers.ValidationError('Can only create reports for approved plans')
+
+        return data
