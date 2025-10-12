@@ -36,13 +36,23 @@ const Reporting: React.FC = () => {
     retry: false
   });
 
-  const { data: planData, isLoading: isLoadingPlan, error: planDataError } = useQuery({
+  const { data: planData, isLoading: isLoadingPlan, error: planDataError, refetch: refetchPlanData } = useQuery({
     queryKey: ['report-plan-data', reportId],
     queryFn: async () => {
-      if (!reportId) return null;
-      console.log('Fetching plan data for report:', reportId);
+      if (!reportId) {
+        console.log('Query function called but no reportId');
+        return null;
+      }
+      console.log('=== FETCHING PLAN DATA ===');
+      console.log('Report ID:', reportId);
+      console.log('Step:', step);
+
       const response = await api.get(`/reports/${reportId}/plan_data/`);
       console.log('Plan data response:', response.data);
+      console.log('Plan data array:', response.data.plan_data);
+      console.log('Plan data length:', response.data.plan_data?.length);
+      console.log('Plan data type:', typeof response.data.plan_data);
+      console.log('Is array?', Array.isArray(response.data.plan_data));
 
       // If no plan data, fetch debug info
       if (!response.data.plan_data || response.data.plan_data.length === 0) {
@@ -60,6 +70,16 @@ const Reporting: React.FC = () => {
     enabled: !!reportId && step === 2,
     retry: 1
   });
+
+  // Log whenever query conditions change
+  React.useEffect(() => {
+    console.log('=== QUERY CONDITIONS ===');
+    console.log('reportId:', reportId);
+    console.log('step:', step);
+    console.log('enabled:', !!reportId && step === 2);
+    console.log('isLoadingPlan:', isLoadingPlan);
+    console.log('planData:', planData);
+  }, [reportId, step, isLoadingPlan, planData]);
 
   const { data: existingAchievements } = useQuery({
     queryKey: ['report-achievements', reportId],
@@ -402,6 +422,15 @@ const Reporting: React.FC = () => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-semibold mb-4">Step 2: Enter Achievement Data</h2>
           <p className="text-gray-600 mb-4">Fill in the actual achievements for each target</p>
+
+          {(() => {
+            console.log('=== RENDERING STEP 2 ===');
+            console.log('isLoadingPlan:', isLoadingPlan);
+            console.log('planData:', planData);
+            console.log('planData?.plan_data:', planData?.plan_data);
+            console.log('planData?.plan_data?.length:', planData?.plan_data?.length);
+            return null;
+          })()}
 
           {isLoadingPlan ? (
             <div className="flex items-center justify-center py-12">
