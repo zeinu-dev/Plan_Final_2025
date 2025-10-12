@@ -59,7 +59,32 @@ const Reporting: React.FC = () => {
         console.log('No plan data found, fetching debug info...');
         try {
           const debugResponse = await api.get(`/reports/${reportId}/debug_plan_structure/`);
-          console.log('DEBUG - Plan structure:', debugResponse.data);
+          console.log('DEBUG - Plan structure:', JSON.stringify(debugResponse.data, null, 2));
+
+          // Log specific details
+          if (debugResponse.data.objectives) {
+            console.log('Objectives count:', debugResponse.data.objectives.length);
+            debugResponse.data.objectives.forEach((obj: any, idx: number) => {
+              console.log(`\nObjective ${idx + 1}: ${obj.title}`);
+              console.log(`  Initiatives count: ${obj.initiatives?.length || 0}`);
+              obj.initiatives?.forEach((init: any) => {
+                console.log(`    Initiative: ${init.name}`);
+                console.log(`      Organization: ${init.organization}`);
+                console.log(`      Measures: ${init.measures?.length || 0}`);
+                console.log(`      Activities: ${init.activities?.length || 0}`);
+
+                init.measures?.forEach((m: any) => {
+                  console.log(`        Measure: ${m.name}, Type: ${m.target_type}, Org: ${m.organization}`);
+                  console.log(`          Targets: Q1=${m.q1_target}, Q2=${m.q2_target}, Q3=${m.q3_target}, Q4=${m.q4_target}, Annual=${m.annual_target}`);
+                });
+
+                init.activities?.forEach((a: any) => {
+                  console.log(`        Activity: ${a.name}, Type: ${a.target_type}, Org: ${a.organization}`);
+                  console.log(`          Targets: Q1=${a.q1_target}, Q2=${a.q2_target}, Q3=${a.q3_target}, Q4=${a.q4_target}, Annual=${a.annual_target}`);
+                });
+              });
+            });
+          }
         } catch (debugError) {
           console.error('Failed to fetch debug info:', debugError);
         }
