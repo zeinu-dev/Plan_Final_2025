@@ -1300,7 +1300,7 @@ class Report(models.Model):
         related_name='reports'
     )
     report_type = models.CharField(max_length=10, choices=REPORT_TYPES)
-    report_date = models.DateField(default=timezone.now)
+    report_date = models.DateField(default=timezone.localdate)
     narrative_report = models.FileField(upload_to='narrative_reports/', null=True, blank=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
