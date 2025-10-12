@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FileText, Upload, AlertCircle, CheckCircle, ArrowLeft, Loader, Save } from 'lucide-react';
 import { api } from '../lib/api';
 import { REPORT_TYPES, Report, ReportPlanData, PerformanceAchievement, ActivityAchievement } from '../types/report';
+import { MEReportTable } from '../components/MEReportTable';
 
 const Reporting: React.FC = () => {
   const navigate = useNavigate();
@@ -233,9 +234,7 @@ const Reporting: React.FC = () => {
     },
     onSuccess: () => {
       setSuccess('Report submitted successfully!');
-      setTimeout(() => {
-        navigate('/planning');
-      }, 2000);
+      setStep(4);
     },
     onError: (err: any) => {
       setError('Failed to submit report');
@@ -309,6 +308,63 @@ const Reporting: React.FC = () => {
 
   const handleFinishReporting = () => {
     submitReportMutation.mutate();
+  };
+
+  const getMEReportData = () => {
+    if (!planData?.plan_data || !existingAchievements) return [];
+
+    const objectivesMap = new Map();
+
+    planData.plan_data.forEach((initiative: ReportPlanData) => {
+      if (!objectivesMap.has(initiative.objective_id)) {
+        objectivesMap.set(initiative.objective_id, {
+          id: initiative.objective_id,
+          title: initiative.objective_title,
+          weight: initiative.objective_weight,
+          initiatives: []
+        });
+      }
+
+      const objective = objectivesMap.get(initiative.objective_id);
+
+      const performanceMeasures = initiative.performance_measures.map(measure => {
+        const achievement = existingAchievements.performance.find(
+          (a: any) => a.performance_measure === measure.id
+        );
+        return {
+          id: measure.id,
+          name: measure.name,
+          weight: measure.weight,
+          target: measure.target,
+          achievement: achievement?.achievement || 0,
+          justification: achievement?.justification || ''
+        };
+      });
+
+      const mainActivities = initiative.main_activities.map(activity => {
+        const achievement = existingAchievements.activities.find(
+          (a: any) => a.main_activity === activity.id
+        );
+        return {
+          id: activity.id,
+          name: activity.name,
+          weight: activity.weight,
+          target: activity.target,
+          achievement: achievement?.achievement || 0,
+          justification: achievement?.justification || ''
+        };
+      });
+
+      objective.initiatives.push({
+        id: initiative.initiative_id,
+        name: initiative.initiative_name,
+        weight: initiative.initiative_weight,
+        performanceMeasures,
+        mainActivities
+      });
+    });
+
+    return Array.from(objectivesMap.values());
   };
 
   if (!planId) {
@@ -386,12 +442,12 @@ const Reporting: React.FC = () => {
 
       <div className="mb-6">
         <div className="flex items-center justify-between">
-          {[1, 2, 3].map((s) => (
+          {[1, 2, 3, 4].map((s) => (
             <div key={s} className="flex items-center flex-1">
               <div className={`flex items-center justify-center w-10 h-10 rounded-full ${step >= s ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
                 {s}
               </div>
-              {s < 3 && <div className={`flex-1 h-1 mx-2 ${step > s ? 'bg-green-600' : 'bg-gray-200'}`} />}
+              {s < 4 && <div className={`flex-1 h-1 mx-2 ${step > s ? 'bg-green-600' : 'bg-gray-200'}`} />}
             </div>
           ))}
         </div>
@@ -399,6 +455,7 @@ const Reporting: React.FC = () => {
           <span className="text-sm text-gray-600">Select Report Type</span>
           <span className="text-sm text-gray-600">Enter Achievements</span>
           <span className="text-sm text-gray-600">Upload & Submit</span>
+          <span className="text-sm text-gray-600">M&E Report</span>
         </div>
       </div>
 
@@ -662,6 +719,27 @@ const Reporting: React.FC = () => {
                   Finish Reporting
                 </>
               )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 4 && (
+        <div className="space-y-6">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center">
+            <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+            <span className="text-green-700 font-medium">Report submitted successfully!</span>
+          </div>
+
+          <MEReportTable objectives={getMEReportData()} />
+
+          <div className="flex justify-center mt-6">
+            <button
+              onClick={() => navigate('/planning')}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Planning
             </button>
           </div>
         </div>
