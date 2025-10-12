@@ -24,6 +24,26 @@ export const ReportEvaluationModal: React.FC<ReportEvaluationModalProps> = ({ re
     }
   });
 
+  const handleDownloadNarrative = async () => {
+    if (!report.narrative_report) return;
+
+    try {
+      const response = await fetch(report.narrative_report);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Narrative_Report_${report.organization_name}_${report.report_type}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Error downloading narrative report:', error);
+      alert('Failed to download narrative report. Please try again.');
+    }
+  };
+
   const evaluateMutation = useMutation({
     mutationFn: async (data: { action: 'approve' | 'reject'; feedback: string }) => {
       const endpoint = data.action === 'approve' ? 'approve' : 'reject';
@@ -109,14 +129,13 @@ export const ReportEvaluationModal: React.FC<ReportEvaluationModalProps> = ({ re
             </dl>
             <div className="mt-4 flex gap-3">
               {report.narrative_report && (
-                <a
-                  href={report.narrative_report}
-                  download
+                <button
+                  onClick={handleDownloadNarrative}
                   className="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium"
                 >
                   <FileText className="h-4 w-4 mr-1" />
                   Download Narrative Report
-                </a>
+                </button>
               )}
               <button
                 type="button"

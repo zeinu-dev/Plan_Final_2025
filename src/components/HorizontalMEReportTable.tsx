@@ -1,6 +1,8 @@
 import React from 'react';
 import { Download, FileSpreadsheet } from 'lucide-react';
-import { exportToExcel, exportToPDF } from '../lib/utils/export';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface PerformanceMeasureData {
   id: number;
@@ -105,21 +107,134 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
 }) => {
   const handleExportExcel = () => {
     const data = prepareExportData();
-    exportToExcel(data, `ME_Report_${organizationName}_${reportType}.xlsx`);
+
+    const wb = XLSX.utils.book_new();
+
+    const metadataRows = [
+      ['M&E Report'],
+      ['Organization:', organizationName],
+      ['Report Type:', reportType],
+      ['Report Date:', new Date(reportDate).toLocaleDateString()],
+      ['Planner:', plannerName || 'N/A'],
+      []
+    ];
+
+    const headers = [
+      'Item',
+      'Type',
+      'Weight (%)',
+      'Target',
+      'Achievement',
+      'Achievement (%)',
+      'Achievement by Weight',
+      'Justification'
+    ];
+
+    const excelData = data.map(row => [
+      row['Strategic Objective'] || '',
+      row['Type'] || '',
+      row['Weight (%)'] || '',
+      row['Target'] || '',
+      row['Achievement'] || '',
+      row['Achievement (%)'] || '',
+      row['Achievement by Weight'] || '',
+      row['Justification'] || ''
+    ]);
+
+    const wsData = [...metadataRows, headers, ...excelData];
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    const colWidths = [
+      { wch: 50 },
+      { wch: 20 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 15 },
+      { wch: 20 },
+      { wch: 40 }
+    ];
+    ws['!cols'] = colWidths;
+
+    XLSX.utils.book_append_sheet(wb, ws, 'M&E Report');
+
+    XLSX.writeFile(wb, `ME_Report_${organizationName}_${reportType}.xlsx`);
   };
 
   const handleExportPDF = () => {
     const data = prepareExportData();
-    exportToPDF(
-      data,
-      `M&E Report - ${organizationName} - ${reportType}`,
-      {
-        organization: organizationName,
-        reportType,
-        reportDate,
-        planner: plannerName || 'N/A'
+
+    const doc = new jsPDF('landscape', 'pt', 'a4');
+
+    doc.setFontSize(16);
+    doc.text('M&E Report', 40, 40);
+
+    doc.setFontSize(10);
+    let yPos = 70;
+    doc.text(`Organization: ${organizationName}`, 40, yPos);
+    yPos += 15;
+    doc.text(`Report Type: ${reportType}`, 40, yPos);
+    yPos += 15;
+    doc.text(`Report Date: ${new Date(reportDate).toLocaleDateString()}`, 40, yPos);
+    yPos += 15;
+    if (plannerName) {
+      doc.text(`Planner: ${plannerName}`, 40, yPos);
+      yPos += 15;
+    }
+
+    const tableData = data.map(row => [
+      row['Strategic Objective'] || '',
+      row['Type'] || '',
+      row['Weight (%)'] || '',
+      row['Target'] || '',
+      row['Achievement'] || '',
+      row['Achievement (%)'] || '',
+      row['Achievement by Weight'] || '',
+      row['Justification'] || ''
+    ]);
+
+    autoTable(doc, {
+      startY: yPos + 10,
+      head: [[
+        'Item',
+        'Type',
+        'Weight (%)',
+        'Target',
+        'Achievement',
+        'Achievement (%)',
+        'Achievement by Weight',
+        'Justification'
+      ]],
+      body: tableData,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [66, 139, 202], textColor: 255, fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 150 },
+        1: { cellWidth: 70 },
+        2: { cellWidth: 50 },
+        3: { cellWidth: 50 },
+        4: { cellWidth: 60 },
+        5: { cellWidth: 70 },
+        6: { cellWidth: 80 },
+        7: { cellWidth: 150 }
+      },
+      didParseCell: (data) => {
+        const row = tableData[data.row.index];
+        if (row && data.section === 'body') {
+          if (row[1] === 'Objective') {
+            data.cell.styles.fillColor = [219, 234, 254];
+            data.cell.styles.fontStyle = 'bold';
+          } else if (row[1] === 'Initiative') {
+            data.cell.styles.fillColor = [238, 242, 255];
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
       }
-    );
+    });
+
+    doc.save(`ME_Report_${organizationName}_${reportType}.pdf`);
   };
 
   const prepareExportData = () => {
