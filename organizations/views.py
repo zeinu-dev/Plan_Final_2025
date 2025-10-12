@@ -2053,6 +2053,15 @@ class ReportViewSet(viewsets.ModelViewSet):
         elif obj.target_type == 'ANNUAL':
             if report_type == 'YEARLY':
                 return obj.annual_target
+            elif report_type in ['Q1', 'Q2', 'Q3', 'Q4']:
+                # For quarterly reports on annual targets, divide by 4
+                return obj.annual_target / 4 if obj.annual_target else None
+            elif report_type == '6M':
+                # For 6-month reports on annual targets, divide by 2
+                return obj.annual_target / 2 if obj.annual_target else None
+            elif report_type == '9M':
+                # For 9-month reports on annual targets, multiply by 3/4
+                return (obj.annual_target * 3 / 4) if obj.annual_target else None
         return None
 
 
