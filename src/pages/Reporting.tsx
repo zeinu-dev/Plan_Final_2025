@@ -21,6 +21,7 @@ const Reporting: React.FC = () => {
 
   const [performanceAchievements, setPerformanceAchievements] = useState<Record<number, PerformanceAchievement>>({});
   const [activityAchievements, setActivityAchievements] = useState<Record<number, ActivityAchievement>>({});
+  const [currentReport, setCurrentReport] = useState<Report | null>(null);
 
   const { data: approvedPlan, isLoading: isLoadingApprovedPlan, error: planError } = useQuery({
     queryKey: ['approved-plan', planId],
@@ -157,8 +158,11 @@ const Reporting: React.FC = () => {
         );
 
         if (existingReport) {
-          if (existingReport.submitted_at) {
-            throw new Error('A report for this period has already been submitted. You cannot modify it.');
+          if (existingReport.status === 'APPROVED') {
+            throw new Error('This report has been approved and cannot be modified.');
+          }
+          if (existingReport.status === 'SUBMITTED') {
+            throw new Error('This report is currently under review and cannot be modified.');
           }
           return existingReport;
         }
@@ -174,11 +178,16 @@ const Reporting: React.FC = () => {
     },
     onSuccess: (data) => {
       setReportId(data.id);
-      setStep(2);
+      setCurrentReport(data);
 
-      if (data.submitted_at) {
+      if (data.status === 'REJECTED') {
+        setStep(2);
+        setSuccess('Report loaded. Please review the feedback and update your achievements.');
+      } else if (data.submitted_at) {
+        setStep(2);
         setSuccess('Loading existing report...');
       } else {
+        setStep(2);
         setSuccess('Report created successfully. Please enter achievement data.');
       }
       setTimeout(() => setSuccess(null), 3000);
@@ -235,7 +244,11 @@ const Reporting: React.FC = () => {
         });
       }
 
-      await api.post(`/reports/${reportId}/submit/`);
+      if (currentReport?.status === 'REJECTED') {
+        await api.post(`/reports/${reportId}/resubmit/`);
+      } else {
+        await api.post(`/reports/${reportId}/submit/`);
+      }
     },
     onSuccess: () => {
       setSuccess('Report submitted successfully!');
@@ -518,6 +531,27 @@ const Reporting: React.FC = () => {
           <h2 className="text-lg font-semibold mb-4">Step 2: Enter Achievement Data</h2>
           <p className="text-gray-600 mb-4">Fill in the actual achievements for each target</p>
 
+          {currentReport?.status === 'REJECTED' && currentReport.evaluator_feedback && (
+            <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4">
+              <div className="flex items-start">
+                <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 mr-3 flex-shrink-0" />
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-red-800 mb-1">Report Rejected - Feedback from Evaluator</h3>
+                  <p className="text-sm text-red-700 whitespace-pre-wrap">{currentReport.evaluator_feedback}</p>
+                  {currentReport.evaluator_name && (
+                    <p className="text-xs text-red-600 mt-2">
+                      Evaluated by: {currentReport.evaluator_name} on{' '}
+                      {currentReport.evaluated_at && new Date(currentReport.evaluated_at).toLocaleDateString()}
+                    </p>
+                  )}
+                  <p className="text-sm text-red-800 font-medium mt-2">
+                    Please review the feedback and update your achievements accordingly before resubmitting.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {(() => {
             console.log('=== RENDERING STEP 2 ===');
             console.log('isLoadingPlan:', isLoadingPlan);
@@ -724,12 +758,12 @@ const Reporting: React.FC = () => {
               {submitReportMutation.isPending ? (
                 <>
                   <Loader className="h-4 w-4 mr-2 animate-spin" />
-                  Submitting...
+                  {currentReport?.status === 'REJECTED' ? 'Resubmitting...' : 'Submitting...'}
                 </>
               ) : (
                 <>
                   <CheckCircle className="h-4 w-4 mr-2" />
-                  Finish Reporting
+                  {currentReport?.status === 'REJECTED' ? 'Resubmit Report' : 'Finish Reporting'}
                 </>
               )}
             </button>

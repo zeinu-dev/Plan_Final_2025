@@ -1837,9 +1837,13 @@ class ReportViewSet(viewsets.ModelViewSet):
         try:
             report = self.get_object()
 
-            if report.submitted_at:
+            if report.status == 'SUBMITTED':
                 return Response({'error': 'Report already submitted'}, status=status.HTTP_400_BAD_REQUEST)
 
+            if report.status == 'APPROVED':
+                return Response({'error': 'Report already approved'}, status=status.HTTP_400_BAD_REQUEST)
+
+            report.status = 'SUBMITTED'
             report.submitted_at = timezone.now()
             report.save()
 
@@ -1847,6 +1851,83 @@ class ReportViewSet(viewsets.ModelViewSet):
 
         except Exception as e:
             logger.exception("Error submitting report")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        try:
+            report = self.get_object()
+            user = request.user
+
+            user_organizations = OrganizationUser.objects.filter(user=user)
+            user_roles = user_organizations.values_list('role', flat=True)
+
+            if 'EVALUATOR' not in user_roles and 'ADMIN' not in user_roles:
+                return Response({'error': 'Only evaluators can approve reports'}, status=status.HTTP_403_FORBIDDEN)
+
+            if report.status != 'SUBMITTED':
+                return Response({'error': 'Can only approve submitted reports'}, status=status.HTTP_400_BAD_REQUEST)
+
+            report.status = 'APPROVED'
+            report.evaluator = user
+            report.evaluated_at = timezone.now()
+            report.evaluator_feedback = request.data.get('feedback', '')
+            report.save()
+
+            return Response({'message': 'Report approved successfully'}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("Error approving report")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        try:
+            report = self.get_object()
+            user = request.user
+
+            user_organizations = OrganizationUser.objects.filter(user=user)
+            user_roles = user_organizations.values_list('role', flat=True)
+
+            if 'EVALUATOR' not in user_roles and 'ADMIN' not in user_roles:
+                return Response({'error': 'Only evaluators can reject reports'}, status=status.HTTP_403_FORBIDDEN)
+
+            if report.status != 'SUBMITTED':
+                return Response({'error': 'Can only reject submitted reports'}, status=status.HTTP_400_BAD_REQUEST)
+
+            feedback = request.data.get('feedback', '')
+            if not feedback:
+                return Response({'error': 'Feedback is required when rejecting a report'}, status=status.HTTP_400_BAD_REQUEST)
+
+            report.status = 'REJECTED'
+            report.evaluator = user
+            report.evaluated_at = timezone.now()
+            report.evaluator_feedback = feedback
+            report.save()
+
+            return Response({'message': 'Report rejected successfully'}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("Error rejecting report")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['post'])
+    def resubmit(self, request, pk=None):
+        try:
+            report = self.get_object()
+
+            if report.status != 'REJECTED':
+                return Response({'error': 'Can only resubmit rejected reports'}, status=status.HTTP_400_BAD_REQUEST)
+
+            report.status = 'SUBMITTED'
+            report.submitted_at = timezone.now()
+            report.evaluated_at = None
+            report.save()
+
+            return Response({'message': 'Report resubmitted successfully'}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("Error resubmitting report")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['get'])
@@ -2014,54 +2095,58 @@ class ReportViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def _get_target_for_period(self, obj, report_type):
-        if obj.target_type == 'QUARTERLY':
+        """
+        Get the target value for a specific reporting period.
+        Checks quarterly targets first, falls back to annual target if needed.
+        """
+        # Check if quarterly targets are defined (non-zero)
+        has_quarterly = any([
+            obj.q1_target and obj.q1_target > 0,
+            obj.q2_target and obj.q2_target > 0,
+            obj.q3_target and obj.q3_target > 0,
+            obj.q4_target and obj.q4_target > 0
+        ])
+
+        if has_quarterly:
+            # Use quarterly targets
             if report_type == 'Q1':
-                return obj.q1_target
+                return obj.q1_target if obj.q1_target else None
             elif report_type == 'Q2':
-                return obj.q2_target
+                return obj.q2_target if obj.q2_target else None
             elif report_type == '6M':
                 q1 = obj.q1_target if obj.q1_target else 0
                 q2 = obj.q2_target if obj.q2_target else 0
                 return q1 + q2 if (q1 or q2) else None
             elif report_type == 'Q3':
-                return obj.q3_target
+                return obj.q3_target if obj.q3_target else None
             elif report_type == '9M':
                 q1 = obj.q1_target if obj.q1_target else 0
                 q2 = obj.q2_target if obj.q2_target else 0
                 q3 = obj.q3_target if obj.q3_target else 0
                 return q1 + q2 + q3 if (q1 or q2 or q3) else None
             elif report_type == 'Q4':
-                return obj.q4_target
+                return obj.q4_target if obj.q4_target else None
             elif report_type == 'YEARLY':
                 q1 = obj.q1_target if obj.q1_target else 0
                 q2 = obj.q2_target if obj.q2_target else 0
                 q3 = obj.q3_target if obj.q3_target else 0
                 q4 = obj.q4_target if obj.q4_target else 0
                 return q1 + q2 + q3 + q4 if (q1 or q2 or q3 or q4) else None
-        elif obj.target_type == 'MONTHLY':
-            months_mapping = {
-                'Q1': obj.selected_months[:3] if obj.selected_months else [],
-                'Q2': obj.selected_months[3:6] if obj.selected_months else [],
-                '6M': obj.selected_months[:6] if obj.selected_months else [],
-                'Q3': obj.selected_months[6:9] if obj.selected_months else [],
-                '9M': obj.selected_months[:9] if obj.selected_months else [],
-                'Q4': obj.selected_months[9:] if obj.selected_months else [],
-                'YEARLY': obj.selected_months if obj.selected_months else []
-            }
-            selected = months_mapping.get(report_type, [])
-            return sum(selected) if selected else None
-        elif obj.target_type == 'ANNUAL':
+        else:
+            # Fall back to annual target and divide by period
+            annual = obj.annual_target if hasattr(obj, 'annual_target') and obj.annual_target else None
+            if not annual or annual == 0:
+                return None
+
             if report_type == 'YEARLY':
-                return obj.annual_target
+                return annual
             elif report_type in ['Q1', 'Q2', 'Q3', 'Q4']:
-                # For quarterly reports on annual targets, divide by 4
-                return obj.annual_target / 4 if obj.annual_target else None
+                return annual / 4
             elif report_type == '6M':
-                # For 6-month reports on annual targets, divide by 2
-                return obj.annual_target / 2 if obj.annual_target else None
+                return annual / 2
             elif report_type == '9M':
-                # For 9-month reports on annual targets, multiply by 3/4
-                return (obj.annual_target * 3 / 4) if obj.annual_target else None
+                return annual * 3 / 4
+
         return None
 
 

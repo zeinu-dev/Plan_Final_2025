@@ -1,0 +1,189 @@
+import React, { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { X, CheckCircle, XCircle, FileText } from 'lucide-react';
+import { Report } from '../types/report';
+import { api } from '../lib/api';
+
+interface ReportEvaluationModalProps {
+  report: Report;
+  onClose: () => void;
+}
+
+export const ReportEvaluationModal: React.FC<ReportEvaluationModalProps> = ({ report, onClose }) => {
+  const [action, setAction] = useState<'approve' | 'reject' | null>(null);
+  const [feedback, setFeedback] = useState('');
+  const queryClient = useQueryClient();
+
+  const evaluateMutation = useMutation({
+    mutationFn: async (data: { action: 'approve' | 'reject'; feedback: string }) => {
+      const endpoint = data.action === 'approve' ? 'approve' : 'reject';
+      return api.post(`/reports/${report.id}/${endpoint}/`, { feedback: data.feedback });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
+      onClose();
+    }
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!action) return;
+
+    if (action === 'reject' && !feedback.trim()) {
+      alert('Feedback is required when rejecting a report');
+      return;
+    }
+
+    evaluateMutation.mutate({ action, feedback });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Evaluate Report</h2>
+            <p className="text-sm text-gray-600 mt-1">
+              {report.organization_name} - {report.report_type_display}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <h3 className="font-semibold text-gray-900 mb-3">Report Information</h3>
+            <dl className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <dt className="text-gray-600">Organization</dt>
+                <dd className="font-medium text-gray-900">{report.organization_name}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-600">Report Type</dt>
+                <dd className="font-medium text-gray-900">{report.report_type_display}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-600">Submitted By</dt>
+                <dd className="font-medium text-gray-900">{report.planner_name}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-600">Submitted At</dt>
+                <dd className="font-medium text-gray-900">
+                  {report.submitted_at ? new Date(report.submitted_at).toLocaleDateString() : 'N/A'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-gray-600">Report Date</dt>
+                <dd className="font-medium text-gray-900">
+                  {new Date(report.report_date).toLocaleDateString()}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-gray-600">Status</dt>
+                <dd>
+                  <span className={`inline-block px-2 py-1 text-xs font-semibold rounded ${
+                    report.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
+                    report.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
+                    report.status === 'SUBMITTED' ? 'bg-blue-100 text-blue-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {report.status_display}
+                  </span>
+                </dd>
+              </div>
+            </dl>
+            {report.narrative_report && (
+              <div className="mt-4">
+                <a
+                  href={report.narrative_report}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm"
+                >
+                  <FileText className="h-4 w-4 mr-1" />
+                  View Narrative Report
+                </a>
+              </div>
+            )}
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Evaluation Decision
+              </label>
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => setAction('approve')}
+                  className={`flex-1 px-4 py-3 border-2 rounded-lg transition-colors ${
+                    action === 'approve'
+                      ? 'border-green-500 bg-green-50 text-green-700'
+                      : 'border-gray-300 hover:border-green-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-center">
+                    <CheckCircle className="h-5 w-5 mr-2" />
+                    <span className="font-semibold">Approve</span>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAction('reject')}
+                  className={`flex-1 px-4 py-3 border-2 rounded-lg transition-colors ${
+                    action === 'reject'
+                      ? 'border-red-500 bg-red-50 text-red-700'
+                      : 'border-gray-300 hover:border-red-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-center">
+                    <XCircle className="h-5 w-5 mr-2" />
+                    <span className="font-semibold">Reject</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="feedback" className="block text-sm font-medium text-gray-700 mb-2">
+                Feedback {action === 'reject' && <span className="text-red-500">*</span>}
+              </label>
+              <textarea
+                id="feedback"
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                rows={5}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder={action === 'reject' ? 'Please provide detailed feedback on why this report is being rejected...' : 'Optional: Provide feedback or comments...'}
+                required={action === 'reject'}
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                disabled={evaluateMutation.isPending}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!action || evaluateMutation.isPending}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {evaluateMutation.isPending ? 'Submitting...' : 'Submit Evaluation'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};

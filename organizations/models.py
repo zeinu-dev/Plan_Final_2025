@@ -1283,6 +1283,13 @@ class Report(models.Model):
         ('YEARLY', 'Yearly Report')
     ]
 
+    STATUS_CHOICES = [
+        ('DRAFT', 'Draft'),
+        ('SUBMITTED', 'Submitted'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected')
+    ]
+
     plan = models.ForeignKey(
         Plan,
         on_delete=models.CASCADE,
@@ -1299,9 +1306,19 @@ class Report(models.Model):
         null=True,
         related_name='reports'
     )
+    evaluator = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='evaluated_reports'
+    )
     report_type = models.CharField(max_length=10, choices=REPORT_TYPES)
     report_date = models.DateField(default=timezone.localdate)
     narrative_report = models.FileField(upload_to='narrative_reports/', null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
+    evaluator_feedback = models.TextField(blank=True, null=True)
+    evaluated_at = models.DateTimeField(null=True, blank=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

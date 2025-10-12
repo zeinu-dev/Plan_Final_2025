@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Calendar, Eye, Building2, CheckCircle, XCircle, AlertCircle, Loader, RefreshCw, BarChart3, PieChart, DollarSign, LayoutGrid } from 'lucide-react';
+import { Bell, Calendar, Eye, Building2, CheckCircle, XCircle, AlertCircle, Loader, RefreshCw, BarChart3, PieChart, DollarSign, LayoutGrid, FileText } from 'lucide-react';
 import { useLanguage } from '../lib/i18n/LanguageContext';
 import { plans, organizations, auth, api } from '../lib/api';
 import { format } from 'date-fns';
 import PlanReviewForm from '../components/PlanReviewForm';
+import { ReportEvaluationModal } from '../components/ReportEvaluationModal';
 import { isEvaluator } from '../types/user';
 import Cookies from 'js-cookie';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
+import { Report } from '../types/report';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
@@ -23,11 +25,13 @@ const EvaluatorDashboard: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'pending' | 'reviewed'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'reviewed' | 'reports'>('pending');
   const [budgetData, setBudgetData] = useState<any>({
     labels: [],
     datasets: []
@@ -130,6 +134,16 @@ const EvaluatorDashboard: React.FC = () => {
     retry: 2,
     staleTime: 60000,
     refetchOnWindowFocus: false
+  });
+
+  const { data: submittedReports, isLoading: isLoadingReports } = useQuery({
+    queryKey: ['reports', 'submitted'],
+    queryFn: async () => {
+      const response = await api.get('/reports/');
+      const reports = response.data?.results || response.data || [];
+      return reports.filter((r: Report) => r.status === 'SUBMITTED');
+    },
+    enabled: activeTab === 'reports'
   });
 
   // Manual refresh function
@@ -394,7 +408,7 @@ const EvaluatorDashboard: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('reviewed')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              className={`mr-8 py-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'reviewed'
                   ? 'border-green-600 text-green-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -406,6 +420,24 @@ const EvaluatorDashboard: React.FC = () => {
                 {reviewedCount > 0 && (
                   <span className="ml-2 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs">
                     {reviewedCount}
+                  </span>
+                )}
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('reports')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'reports'
+                  ? 'border-green-600 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center">
+                <FileText className="h-5 w-5 mr-2" />
+                Submitted Reports
+                {submittedReports && submittedReports.length > 0 && (
+                  <span className="ml-2 bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-xs">
+                    {submittedReports.length}
                   </span>
                 )}
               </div>
@@ -647,6 +679,78 @@ const EvaluatorDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Submitted Reports Tab */}
+      {activeTab === 'reports' && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="p-4 sm:p-6 lg:p-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Submitted Reports Awaiting Review</h3>
+
+            {isLoadingReports ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader className="h-6 w-6 animate-spin mr-2 text-green-600" />
+                <span>Loading reports...</span>
+              </div>
+            ) : !submittedReports || submittedReports.length === 0 ? (
+              <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-1">No submitted reports</h3>
+                <p className="text-gray-500">There are no reports waiting for your review.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Organization</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Report Type</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted By</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {submittedReports.map((report: Report) => (
+                      <tr key={report.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {report.organization_name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {report.report_type_display}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {report.planner_name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {report.submitted_at ? format(new Date(report.submitted_at), 'MMM d, yyyy') : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-blue-100 text-blue-800">
+                            {report.status_display}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                          <button
+                            onClick={() => {
+                              setSelectedReport(report);
+                              setShowReportModal(true);
+                            }}
+                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700"
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            Review
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Review Modal */}
       {showReviewModal && selectedPlan && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -666,6 +770,17 @@ const EvaluatorDashboard: React.FC = () => {
             />
           </div>
         </div>
+      )}
+
+      {/* Report Evaluation Modal */}
+      {showReportModal && selectedReport && (
+        <ReportEvaluationModal
+          report={selectedReport}
+          onClose={() => {
+            setShowReportModal(false);
+            setSelectedReport(null);
+          }}
+        />
       )}
 
     </div>

@@ -5,10 +5,16 @@ export interface Report {
   organization_name: string;
   planner: number;
   planner_name: string;
+  evaluator?: number;
+  evaluator_name?: string;
   report_type: string;
   report_type_display: string;
   report_date: string;
   narrative_report?: string;
+  status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  status_display: string;
+  evaluator_feedback?: string;
+  evaluated_at?: string;
   submitted_at?: string;
   performance_achievements: PerformanceAchievement[];
   activity_achievements: ActivityAchievement[];

@@ -705,7 +705,9 @@ class ActivityAchievementSerializer(serializers.ModelSerializer):
 class ReportSerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     planner_name = serializers.SerializerMethodField()
+    evaluator_name = serializers.SerializerMethodField()
     report_type_display = serializers.CharField(source='get_report_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
     performance_achievements = PerformanceAchievementSerializer(many=True, read_only=True)
     activity_achievements = ActivityAchievementSerializer(many=True, read_only=True)
 
@@ -713,7 +715,8 @@ class ReportSerializer(serializers.ModelSerializer):
         model = Report
         fields = [
             'id', 'plan', 'organization', 'organization_name', 'planner', 'planner_name',
-            'report_type', 'report_type_display', 'report_date', 'narrative_report',
+            'evaluator', 'evaluator_name', 'report_type', 'report_type_display', 'report_date',
+            'narrative_report', 'status', 'status_display', 'evaluator_feedback', 'evaluated_at',
             'submitted_at', 'performance_achievements', 'activity_achievements',
             'created_at', 'updated_at'
         ]
@@ -722,6 +725,11 @@ class ReportSerializer(serializers.ModelSerializer):
         if obj.planner:
             return f"{obj.planner.first_name} {obj.planner.last_name}".strip() or obj.planner.username
         return "Unknown"
+
+    def get_evaluator_name(self, obj):
+        if obj.evaluator:
+            return f"{obj.evaluator.first_name} {obj.evaluator.last_name}".strip() or obj.evaluator.username
+        return None
 
     def validate(self, data):
         plan = data.get('plan')
