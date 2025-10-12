@@ -31,7 +31,7 @@ const EvaluatorDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'pending' | 'reviewed' | 'reports'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'reviewed' | 'reports' | 'approved_reports'>('pending');
   const [budgetData, setBudgetData] = useState<any>({
     labels: [],
     datasets: []
@@ -144,6 +144,16 @@ const EvaluatorDashboard: React.FC = () => {
       return reports.filter((r: Report) => r.status === 'SUBMITTED');
     },
     enabled: activeTab === 'reports'
+  });
+
+  const { data: approvedReports, isLoading: isLoadingApprovedReports } = useQuery({
+    queryKey: ['reports', 'approved'],
+    queryFn: async () => {
+      const response = await api.get('/reports/');
+      const reports = response.data?.results || response.data || [];
+      return reports.filter((r: Report) => r.status === 'APPROVED');
+    },
+    enabled: activeTab === 'approved_reports'
   });
 
   // Manual refresh function
@@ -426,7 +436,7 @@ const EvaluatorDashboard: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('reports')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              className={`mr-8 py-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'reports'
                   ? 'border-green-600 text-green-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -436,8 +446,26 @@ const EvaluatorDashboard: React.FC = () => {
                 <FileText className="h-5 w-5 mr-2" />
                 Submitted Reports
                 {submittedReports && submittedReports.length > 0 && (
-                  <span className="ml-2 bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-xs">
+                  <span className="ml-2 bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs">
                     {submittedReports.length}
+                  </span>
+                )}
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('approved_reports')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'approved_reports'
+                  ? 'border-green-600 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center">
+                <CheckCircle className="h-5 w-5 mr-2" />
+                Approved Reports
+                {approvedReports && approvedReports.length > 0 && (
+                  <span className="ml-2 bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs">
+                    {approvedReports.length}
                   </span>
                 )}
               </div>
@@ -739,6 +767,82 @@ const EvaluatorDashboard: React.FC = () => {
                           >
                             <Eye className="h-4 w-4 mr-1" />
                             Review
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Approved Reports Tab */}
+      {activeTab === 'approved_reports' && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="p-4 sm:p-6 lg:p-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Approved Reports</h3>
+
+            {isLoadingApprovedReports ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader className="h-6 w-6 animate-spin mr-2 text-green-600" />
+                <span>Loading approved reports...</span>
+              </div>
+            ) : !approvedReports || approvedReports.length === 0 ? (
+              <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                <CheckCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-1">No approved reports</h3>
+                <p className="text-gray-500">There are no approved reports yet.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Organization</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Report Type</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted By</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Approved By</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Approved Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {approvedReports.map((report: Report) => (
+                      <tr key={report.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {report.organization_name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {report.report_type_display}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {report.planner_name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {report.evaluator_name || 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {report.evaluated_at ? format(new Date(report.evaluated_at), 'MMM d, yyyy') : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-block px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800">
+                            {report.status_display}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                          <button
+                            onClick={() => {
+                              setSelectedReport(report);
+                              setShowReportModal(true);
+                            }}
+                            className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50"
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View
                           </button>
                         </td>
                       </tr>

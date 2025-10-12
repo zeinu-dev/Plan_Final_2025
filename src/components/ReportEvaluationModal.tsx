@@ -29,15 +29,27 @@ export const ReportEvaluationModal: React.FC<ReportEvaluationModalProps> = ({ re
 
     try {
       const response = await fetch(report.narrative_report);
+      if (!response.ok) {
+        throw new Error('Failed to fetch file');
+      }
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
+      a.style.display = 'none';
       a.href = url;
-      a.download = `Narrative_Report_${report.organization_name}_${report.report_type}.pdf`;
+
+      const filename = report.narrative_report.split('/').pop() ||
+                      `Narrative_Report_${report.organization_name}_${report.report_type}`;
+      a.download = filename;
+
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }, 100);
     } catch (error) {
       console.error('Error downloading narrative report:', error);
       alert('Failed to download narrative report. Please try again.');
