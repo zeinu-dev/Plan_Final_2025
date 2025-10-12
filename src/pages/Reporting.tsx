@@ -31,19 +31,80 @@ const Reporting: React.FC = () => {
     enabled: !!reportId && step === 2
   });
 
+  const { data: existingAchievements } = useQuery({
+    queryKey: ['report-achievements', reportId],
+    queryFn: async () => {
+      if (!reportId) return null;
+
+      const [perfResponse, actResponse] = await Promise.all([
+        api.get('/performance-achievements/', { params: { report: reportId } }),
+        api.get('/activity-achievements/', { params: { report: reportId } })
+      ]);
+
+      const perfAchievements: Record<number, PerformanceAchievement> = {};
+      const actAchievements: Record<number, ActivityAchievement> = {};
+
+      (perfResponse.data?.results || perfResponse.data || []).forEach((pa: PerformanceAchievement) => {
+        perfAchievements[pa.performance_measure] = pa;
+      });
+
+      (actResponse.data?.results || actResponse.data || []).forEach((aa: ActivityAchievement) => {
+        actAchievements[aa.main_activity] = aa;
+      });
+
+      setPerformanceAchievements(perfAchievements);
+      setActivityAchievements(actAchievements);
+
+      return { perfAchievements, actAchievements };
+    },
+    enabled: !!reportId && step === 2
+  });
+
   const createReportMutation = useMutation({
     mutationFn: async (data: { plan: number; report_type: string }) => {
-      const response = await api.post('/reports/', data);
-      return response.data;
+      try {
+        const checkResponse = await api.get('/reports/', {
+          params: {
+            plan: data.plan,
+            report_type: data.report_type
+          }
+        });
+
+        const existingReports = checkResponse.data?.results || checkResponse.data || [];
+        const existingReport = existingReports.find(
+          (r: any) => r.plan === data.plan && r.report_type === data.report_type
+        );
+
+        if (existingReport) {
+          if (existingReport.submitted_at) {
+            throw new Error('A report for this period has already been submitted. You cannot modify it.');
+          }
+          return existingReport;
+        }
+
+        const response = await api.post('/reports/', data);
+        return response.data;
+      } catch (error: any) {
+        if (error.message) {
+          throw error;
+        }
+        throw error;
+      }
     },
     onSuccess: (data) => {
       setReportId(data.id);
       setStep(2);
-      setSuccess('Report created successfully. Please enter achievement data.');
+
+      if (data.submitted_at) {
+        setSuccess('Loading existing report...');
+      } else {
+        setSuccess('Report created successfully. Please enter achievement data.');
+      }
       setTimeout(() => setSuccess(null), 3000);
     },
     onError: (err: any) => {
-      setError(err.response?.data?.error || 'Failed to create report');
+      const errorMessage = err.message || err.response?.data?.error || err.response?.data?.non_field_errors?.[0] || 'Failed to create report';
+      setError(errorMessage);
       setTimeout(() => setError(null), 5000);
     }
   });

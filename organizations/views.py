@@ -1758,6 +1758,15 @@ class ReportViewSet(viewsets.ModelViewSet):
         user_roles = user_organizations.values_list('role', flat=True)
         user_org_ids = user_organizations.values_list('organization', flat=True)
 
+        plan_id = self.request.query_params.get('plan')
+        report_type = self.request.query_params.get('report_type')
+
+        if plan_id:
+            queryset = queryset.filter(plan_id=plan_id)
+
+        if report_type:
+            queryset = queryset.filter(report_type=report_type)
+
         if 'ADMIN' in user_roles:
             return queryset
 
@@ -1770,6 +1779,14 @@ class ReportViewSet(viewsets.ModelViewSet):
 
             if not plan_id or not report_type:
                 return Response({'error': 'Plan and report type are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            existing_report = Report.objects.filter(plan_id=plan_id, report_type=report_type).first()
+            if existing_report:
+                if existing_report.submitted_at:
+                    return Response({'error': 'A report for this period has already been submitted. You cannot modify it.'}, status=status.HTTP_400_BAD_REQUEST)
+
+                serializer = self.get_serializer(existing_report)
+                return Response(serializer.data, status=status.HTTP_200_OK)
 
             plan = Plan.objects.get(id=plan_id)
 
