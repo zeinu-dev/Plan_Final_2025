@@ -21,14 +21,32 @@ const Reporting: React.FC = () => {
   const [performanceAchievements, setPerformanceAchievements] = useState<Record<number, PerformanceAchievement>>({});
   const [activityAchievements, setActivityAchievements] = useState<Record<number, ActivityAchievement>>({});
 
-  const { data: planData, isLoading: isLoadingPlan } = useQuery({
+  const { data: approvedPlan, isLoading: isLoadingApprovedPlan, error: planError } = useQuery({
+    queryKey: ['approved-plan', planId],
+    queryFn: async () => {
+      if (!planId) return null;
+      const response = await api.get(`/plans/${planId}/`);
+      console.log('Plan data:', response.data);
+      if (response.data.status !== 'APPROVED') {
+        throw new Error('Plan is not approved. Only approved plans can be reported on.');
+      }
+      return response.data;
+    },
+    enabled: !!planId,
+    retry: false
+  });
+
+  const { data: planData, isLoading: isLoadingPlan, error: planDataError } = useQuery({
     queryKey: ['report-plan-data', reportId],
     queryFn: async () => {
       if (!reportId) return null;
+      console.log('Fetching plan data for report:', reportId);
       const response = await api.get(`/reports/${reportId}/plan_data/`);
+      console.log('Plan data response:', response.data);
       return response.data;
     },
-    enabled: !!reportId && step === 2
+    enabled: !!reportId && step === 2,
+    retry: 1
   });
 
   const { data: existingAchievements } = useQuery({
@@ -247,6 +265,28 @@ const Reporting: React.FC = () => {
     );
   }
 
+  if (isLoadingApprovedPlan) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <Loader className="h-6 w-6 animate-spin mr-2" />
+        <span>Loading plan details...</span>
+      </div>
+    );
+  }
+
+  if (planError || !approvedPlan) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <AlertCircle className="h-5 w-5 text-red-600 inline mr-2" />
+          <span className="text-red-700">
+            {planError ? (planError as any).message || 'Failed to load plan' : 'Plan not found'}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="px-4 py-6">
       <div className="mb-6 flex items-center">
@@ -258,9 +298,20 @@ const Reporting: React.FC = () => {
         </button>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Create Progress Report</h1>
-          <p className="text-gray-600">Report on your approved plan achievements</p>
+          <p className="text-gray-600">
+            {approvedPlan ? `Plan: ${approvedPlan.type} - ${approvedPlan.from_date} to ${approvedPlan.to_date}` : 'Report on your approved plan achievements'}
+          </p>
         </div>
       </div>
+
+      {planDataError && step === 2 && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <AlertCircle className="h-5 w-5 text-red-600 inline mr-2" />
+          <span className="text-red-700">
+            Failed to load plan data: {(planDataError as any)?.response?.data?.error || (planDataError as any)?.message || 'Unknown error'}
+          </span>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center text-red-700">

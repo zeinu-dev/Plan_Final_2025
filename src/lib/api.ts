@@ -37,6 +37,16 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const config = error.config as AxiosRequestConfig & { retryCount?: number };
 
+    // Log 500 errors for debugging
+    if (error.response?.status === 500) {
+      console.error('Server 500 error:', {
+        url: config?.url,
+        method: config?.method,
+        data: error.response?.data,
+        message: (error.response?.data as any)?.error || error.message
+      });
+    }
+
     // 🔐 Auto logout on 401
     if (error.response?.status === 401) {
       Cookies.remove('sessionid', { path: '/' });
