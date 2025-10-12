@@ -93,7 +93,7 @@ const Reporting: React.FC = () => {
 
       return response.data;
     },
-    enabled: !!reportId && step === 2,
+    enabled: !!reportId && (step === 2 || step === 4),
     retry: 1
   });
 
@@ -131,9 +131,14 @@ const Reporting: React.FC = () => {
       setPerformanceAchievements(perfAchievements);
       setActivityAchievements(actAchievements);
 
-      return { perfAchievements, actAchievements };
+      return {
+        perfAchievements,
+        actAchievements,
+        performance: perfResponse.data?.results || perfResponse.data || [],
+        activities: actResponse.data?.results || actResponse.data || []
+      };
     },
-    enabled: !!reportId && step === 2
+    enabled: !!reportId && (step === 2 || step === 4)
   });
 
   const createReportMutation = useMutation({
@@ -311,7 +316,15 @@ const Reporting: React.FC = () => {
   };
 
   const getMEReportData = () => {
-    if (!planData?.plan_data || !existingAchievements) return [];
+    if (!planData?.plan_data || !existingAchievements) {
+      console.log('getMEReportData: Missing data', { planData, existingAchievements });
+      return [];
+    }
+
+    if (!existingAchievements.performance || !existingAchievements.activities) {
+      console.log('getMEReportData: Missing achievement arrays', existingAchievements);
+      return [];
+    }
 
     const objectivesMap = new Map();
 
@@ -731,7 +744,14 @@ const Reporting: React.FC = () => {
             <span className="text-green-700 font-medium">Report submitted successfully!</span>
           </div>
 
-          <MEReportTable objectives={getMEReportData()} />
+          {isLoadingPlan || !existingAchievements ? (
+            <div className="flex items-center justify-center py-12 bg-white rounded-lg shadow-sm border border-gray-200">
+              <Loader className="h-6 w-6 animate-spin mr-2" />
+              <span>Loading M&E report data...</span>
+            </div>
+          ) : (
+            <MEReportTable objectives={getMEReportData()} />
+          )}
 
           <div className="flex justify-center mt-6">
             <button
