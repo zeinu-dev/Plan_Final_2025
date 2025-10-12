@@ -1861,15 +1861,15 @@ class ReportViewSet(viewsets.ModelViewSet):
 
             for objective in objectives:
                 initiatives = objective.initiatives.filter(
-                    models.Q(organization=plan.organization) | models.Q(organization__isnull=True)
+                    Q(organization=plan.organization) | Q(organization__isnull=True)
                 )
 
                 for initiative in initiatives:
                     measures = initiative.performance_measures.filter(
-                        models.Q(organization=plan.organization) | models.Q(organization__isnull=True)
+                        Q(organization=plan.organization) | Q(organization__isnull=True)
                     )
                     activities = initiative.main_activities.filter(
-                        models.Q(organization=plan.organization) | models.Q(organization__isnull=True)
+                        Q(organization=plan.organization) | Q(organization__isnull=True)
                     )
 
                     initiative_data = {
