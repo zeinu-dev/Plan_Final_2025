@@ -183,76 +183,104 @@ export const ReportEvaluationModal: React.FC<ReportEvaluationModalProps> = ({ re
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Evaluation Decision
-              </label>
-              <div className="flex gap-4">
+          {report.status === 'SUBMITTED' && (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Evaluation Decision
+                </label>
+                <div className="flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setAction('approve')}
+                    className={`flex-1 px-4 py-3 border-2 rounded-lg transition-colors ${
+                      action === 'approve'
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-300 hover:border-green-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center">
+                      <CheckCircle className="h-5 w-5 mr-2" />
+                      <span className="font-semibold">Approve</span>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAction('reject')}
+                    className={`flex-1 px-4 py-3 border-2 rounded-lg transition-colors ${
+                      action === 'reject'
+                        ? 'border-red-500 bg-red-50 text-red-700'
+                        : 'border-gray-300 hover:border-red-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center">
+                      <XCircle className="h-5 w-5 mr-2" />
+                      <span className="font-semibold">Reject</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="feedback" className="block text-sm font-medium text-gray-700 mb-2">
+                  Feedback {action === 'reject' && <span className="text-red-500">*</span>}
+                </label>
+                <textarea
+                  id="feedback"
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  rows={5}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder={action === 'reject' ? 'Please provide detailed feedback on why this report is being rejected...' : 'Optional: Provide feedback or comments...'}
+                  required={action === 'reject'}
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t">
                 <button
                   type="button"
-                  onClick={() => setAction('approve')}
-                  className={`flex-1 px-4 py-3 border-2 rounded-lg transition-colors ${
-                    action === 'approve'
-                      ? 'border-green-500 bg-green-50 text-green-700'
-                      : 'border-gray-300 hover:border-green-300'
-                  }`}
+                  onClick={onClose}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                  disabled={evaluateMutation.isPending}
                 >
-                  <div className="flex items-center justify-center">
-                    <CheckCircle className="h-5 w-5 mr-2" />
-                    <span className="font-semibold">Approve</span>
-                  </div>
+                  Cancel
                 </button>
                 <button
-                  type="button"
-                  onClick={() => setAction('reject')}
-                  className={`flex-1 px-4 py-3 border-2 rounded-lg transition-colors ${
-                    action === 'reject'
-                      ? 'border-red-500 bg-red-50 text-red-700'
-                      : 'border-gray-300 hover:border-red-300'
-                  }`}
+                  type="submit"
+                  disabled={!action || evaluateMutation.isPending}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <div className="flex items-center justify-center">
-                    <XCircle className="h-5 w-5 mr-2" />
-                    <span className="font-semibold">Reject</span>
-                  </div>
+                  {evaluateMutation.isPending ? 'Submitting...' : 'Submit Evaluation'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {(report.status === 'APPROVED' || report.status === 'REJECTED') && (
+            <div className="space-y-4">
+              {report.evaluator_feedback && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-2">Evaluator Feedback</h4>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{report.evaluator_feedback}</p>
+                  {report.evaluator_name && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      By: {report.evaluator_name} • {report.evaluated_at ? new Date(report.evaluated_at).toLocaleDateString() : 'N/A'}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-end pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                >
+                  Close
                 </button>
               </div>
             </div>
-
-            <div>
-              <label htmlFor="feedback" className="block text-sm font-medium text-gray-700 mb-2">
-                Feedback {action === 'reject' && <span className="text-red-500">*</span>}
-              </label>
-              <textarea
-                id="feedback"
-                value={feedback}
-                onChange={(e) => setFeedback(e.target.value)}
-                rows={5}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder={action === 'reject' ? 'Please provide detailed feedback on why this report is being rejected...' : 'Optional: Provide feedback or comments...'}
-                required={action === 'reject'}
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                disabled={evaluateMutation.isPending}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!action || evaluateMutation.isPending}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {evaluateMutation.isPending ? 'Submitting...' : 'Submit Evaluation'}
-              </button>
-            </div>
-          </form>
+          )}
         </div>
       </div>
     </div>
