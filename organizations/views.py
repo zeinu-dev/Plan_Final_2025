@@ -1856,21 +1856,32 @@ class ReportViewSet(viewsets.ModelViewSet):
             plan = report.plan
             report_type = report.report_type
 
+            logger.info(f"Fetching plan data for report {pk}, plan {plan.id}, type {report_type}")
+
             objectives = plan.selected_objectives.all()
+            logger.info(f"Found {objectives.count()} selected objectives in plan")
+
             plan_data = []
 
             for objective in objectives:
+                logger.info(f"Processing objective: {objective.id} - {objective.title}")
+
                 initiatives = objective.initiatives.filter(
                     Q(organization=plan.organization) | Q(organization__isnull=True)
                 )
+                logger.info(f"Found {initiatives.count()} initiatives for objective {objective.id}")
 
                 for initiative in initiatives:
+                    logger.info(f"Processing initiative: {initiative.id} - {initiative.name}")
+
                     measures = initiative.performance_measures.filter(
                         Q(organization=plan.organization) | Q(organization__isnull=True)
                     )
                     activities = initiative.main_activities.filter(
                         Q(organization=plan.organization) | Q(organization__isnull=True)
                     )
+
+                    logger.info(f"Initiative {initiative.id} has {measures.count()} measures and {activities.count()} activities")
 
                     initiative_data = {
                         'objective_id': objective.id,
@@ -1884,8 +1895,11 @@ class ReportViewSet(viewsets.ModelViewSet):
                     }
 
                     for measure in measures:
+                        logger.info(f"Processing measure {measure.id}: {measure.name}, target_type: {measure.target_type}")
                         target = self._get_target_for_period(measure, report_type)
-                        if target is not None:
+                        logger.info(f"Calculated target for measure {measure.id}: {target}")
+
+                        if target is not None and target > 0:
                             initiative_data['performance_measures'].append({
                                 'id': measure.id,
                                 'name': measure.name,
@@ -1893,10 +1907,15 @@ class ReportViewSet(viewsets.ModelViewSet):
                                 'target': float(target),
                                 'target_type': measure.target_type
                             })
+                        else:
+                            logger.warning(f"Skipping measure {measure.id} - no valid target for {report_type}")
 
                     for activity in activities:
+                        logger.info(f"Processing activity {activity.id}: {activity.name}, target_type: {activity.target_type}")
                         target = self._get_target_for_period(activity, report_type)
-                        if target is not None:
+                        logger.info(f"Calculated target for activity {activity.id}: {target}")
+
+                        if target is not None and target > 0:
                             initiative_data['main_activities'].append({
                                 'id': activity.id,
                                 'name': activity.name,
@@ -1904,14 +1923,94 @@ class ReportViewSet(viewsets.ModelViewSet):
                                 'target': float(target),
                                 'target_type': activity.target_type
                             })
+                        else:
+                            logger.warning(f"Skipping activity {activity.id} - no valid target for {report_type}")
 
                     if initiative_data['performance_measures'] or initiative_data['main_activities']:
                         plan_data.append(initiative_data)
+                        logger.info(f"Added initiative {initiative.id} to plan_data")
+                    else:
+                        logger.warning(f"Skipping initiative {initiative.id} - no valid measures or activities")
 
+            logger.info(f"Returning {len(plan_data)} initiative entries for report {pk}")
             return Response({'plan_data': plan_data}, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.exception("Error fetching plan data for report")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['get'])
+    def debug_plan_structure(self, request, pk=None):
+        """Debug endpoint to inspect plan structure"""
+        try:
+            report = self.get_object()
+            plan = report.plan
+
+            debug_info = {
+                'report_id': report.id,
+                'report_type': report.report_type,
+                'plan_id': plan.id,
+                'plan_status': plan.status,
+                'plan_organization': plan.organization.name,
+                'selected_objectives_count': plan.selected_objectives.count(),
+                'objectives': []
+            }
+
+            for objective in plan.selected_objectives.all():
+                obj_info = {
+                    'id': objective.id,
+                    'title': objective.title,
+                    'weight': float(plan.selected_objectives_weights.get(str(objective.id), 0)) if plan.selected_objectives_weights else 0,
+                    'initiatives_count': objective.initiatives.count(),
+                    'initiatives': []
+                }
+
+                for initiative in objective.initiatives.all():
+                    init_info = {
+                        'id': initiative.id,
+                        'name': initiative.name,
+                        'weight': float(initiative.weight or 0),
+                        'organization': initiative.organization.name if initiative.organization else 'None (Default)',
+                        'measures_count': initiative.performance_measures.count(),
+                        'activities_count': initiative.main_activities.count(),
+                        'measures': [],
+                        'activities': []
+                    }
+
+                    for measure in initiative.performance_measures.all():
+                        init_info['measures'].append({
+                            'id': measure.id,
+                            'name': measure.name,
+                            'target_type': measure.target_type,
+                            'organization': measure.organization.name if measure.organization else 'None (Default)',
+                            'q1_target': float(measure.q1_target) if measure.q1_target else None,
+                            'q2_target': float(measure.q2_target) if measure.q2_target else None,
+                            'q3_target': float(measure.q3_target) if measure.q3_target else None,
+                            'q4_target': float(measure.q4_target) if measure.q4_target else None,
+                            'annual_target': float(measure.annual_target) if measure.annual_target else None,
+                        })
+
+                    for activity in initiative.main_activities.all():
+                        init_info['activities'].append({
+                            'id': activity.id,
+                            'name': activity.name,
+                            'target_type': activity.target_type,
+                            'organization': activity.organization.name if activity.organization else 'None (Default)',
+                            'q1_target': float(activity.q1_target) if activity.q1_target else None,
+                            'q2_target': float(activity.q2_target) if activity.q2_target else None,
+                            'q3_target': float(activity.q3_target) if activity.q3_target else None,
+                            'q4_target': float(activity.q4_target) if activity.q4_target else None,
+                            'annual_target': float(activity.annual_target) if activity.annual_target else None,
+                        })
+
+                    obj_info['initiatives'].append(init_info)
+
+                debug_info['objectives'].append(obj_info)
+
+            return Response(debug_info, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("Error in debug_plan_structure")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def _get_target_for_period(self, obj, report_type):

@@ -43,6 +43,18 @@ const Reporting: React.FC = () => {
       console.log('Fetching plan data for report:', reportId);
       const response = await api.get(`/reports/${reportId}/plan_data/`);
       console.log('Plan data response:', response.data);
+
+      // If no plan data, fetch debug info
+      if (!response.data.plan_data || response.data.plan_data.length === 0) {
+        console.log('No plan data found, fetching debug info...');
+        try {
+          const debugResponse = await api.get(`/reports/${reportId}/debug_plan_structure/`);
+          console.log('DEBUG - Plan structure:', debugResponse.data);
+        } catch (debugError) {
+          console.error('Failed to fetch debug info:', debugError);
+        }
+      }
+
       return response.data;
     },
     enabled: !!reportId && step === 2,
