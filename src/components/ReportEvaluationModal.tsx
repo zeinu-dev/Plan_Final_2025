@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, CheckCircle, XCircle, FileText } from 'lucide-react';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { X, CheckCircle, XCircle, FileText, Loader, Eye } from 'lucide-react';
 import { Report } from '../types/report';
 import { api } from '../lib/api';
+import { HorizontalMEReportTable } from './HorizontalMEReportTable';
 
 interface ReportEvaluationModalProps {
   report: Report;
@@ -12,7 +13,16 @@ interface ReportEvaluationModalProps {
 export const ReportEvaluationModal: React.FC<ReportEvaluationModalProps> = ({ report, onClose }) => {
   const [action, setAction] = useState<'approve' | 'reject' | null>(null);
   const [feedback, setFeedback] = useState('');
+  const [showMETable, setShowMETable] = useState(false);
   const queryClient = useQueryClient();
+
+  const { data: reportData, isLoading: isLoadingReport } = useQuery({
+    queryKey: ['report-plan-data', report.id],
+    queryFn: async () => {
+      const response = await api.get(`/reports/${report.id}/plan_data/`);
+      return response.data;
+    }
+  });
 
   const evaluateMutation = useMutation({
     mutationFn: async (data: { action: 'approve' | 'reject'; feedback: string }) => {
@@ -39,7 +49,7 @@ export const ReportEvaluationModal: React.FC<ReportEvaluationModalProps> = ({ re
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Evaluate Report</h2>
@@ -97,20 +107,50 @@ export const ReportEvaluationModal: React.FC<ReportEvaluationModalProps> = ({ re
                 </dd>
               </div>
             </dl>
-            {report.narrative_report && (
-              <div className="mt-4">
+            <div className="mt-4 flex gap-3">
+              {report.narrative_report && (
                 <a
                   href={report.narrative_report}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm"
+                  download
+                  className="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium"
                 >
                   <FileText className="h-4 w-4 mr-1" />
-                  View Narrative Report
+                  Download Narrative Report
                 </a>
-              </div>
-            )}
+              )}
+              <button
+                type="button"
+                onClick={() => setShowMETable(!showMETable)}
+                className="inline-flex items-center text-green-600 hover:text-green-800 text-sm font-medium"
+              >
+                <Eye className="h-4 w-4 mr-1" />
+                {showMETable ? 'Hide' : 'View'} M&E Report
+              </button>
+            </div>
           </div>
+
+          {showMETable && (
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              {isLoadingReport ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader className="h-6 w-6 animate-spin mr-2" />
+                  <span>Loading M&E data...</span>
+                </div>
+              ) : reportData?.me_data ? (
+                <HorizontalMEReportTable
+                  objectives={reportData.me_data}
+                  organizationName={report.organization_name}
+                  reportType={report.report_type_display}
+                  reportDate={report.report_date}
+                  plannerName={report.planner_name}
+                />
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No M&E data available for this report
+                </div>
+              )}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

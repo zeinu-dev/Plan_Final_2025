@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FileText, Upload, AlertCircle, CheckCircle, ArrowLeft, Loader, Save } from 'lucide-react';
 import { api } from '../lib/api';
 import { REPORT_TYPES, Report, ReportPlanData, PerformanceAchievement, ActivityAchievement } from '../types/report';
-import { MEReportTable } from '../components/MEReportTable';
+import { HorizontalMEReportTable } from '../components/HorizontalMEReportTable';
 
 const Reporting: React.FC = () => {
   const navigate = useNavigate();
@@ -784,7 +784,15 @@ const Reporting: React.FC = () => {
               <span>Loading M&E report data...</span>
             </div>
           ) : (
-            <MEReportTable objectives={getMEReportData()} />
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <HorizontalMEReportTable
+                objectives={getMEReportData()}
+                organizationName={approvedPlan?.organization_name || 'Organization'}
+                reportType={selectedReportType}
+                reportDate={new Date().toISOString()}
+                plannerName={approvedPlan?.planner_name}
+              />
+            </div>
           )}
 
           <div className="flex justify-center mt-6">

@@ -2014,11 +2014,86 @@ class ReportViewSet(viewsets.ModelViewSet):
                         logger.warning(f"Skipping initiative {initiative.id} - no valid measures or activities")
 
             logger.info(f"Returning {len(plan_data)} initiative entries for report {pk}")
-            return Response({'plan_data': plan_data}, status=status.HTTP_200_OK)
+
+            me_data = self._build_me_data(report)
+
+            return Response({
+                'plan_data': plan_data,
+                'me_data': me_data
+            }, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.exception("Error fetching plan data for report")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _build_me_data(self, report):
+        """Build M&E report data structure with achievements"""
+        plan = report.plan
+        objectives = plan.selected_objectives.all()
+        me_data = []
+
+        for objective in objectives:
+            objective_weight = float(plan.selected_objectives_weights.get(str(objective.id), 0)) if plan.selected_objectives_weights else 0
+
+            initiatives_data = []
+            initiatives = objective.initiatives.filter(
+                Q(organization=plan.organization) | Q(organization__isnull=True)
+            )
+
+            for initiative in initiatives:
+                measures = initiative.performance_measures.filter(
+                    Q(organization=plan.organization) | Q(organization__isnull=True)
+                )
+                activities = initiative.main_activities.filter(
+                    Q(organization=plan.organization) | Q(organization__isnull=True)
+                )
+
+                measures_data = []
+                for measure in measures:
+                    target = self._get_target_for_period(measure, report.report_type)
+                    if target and target > 0:
+                        achievement_record = report.performance_achievements.filter(performance_measure=measure).first()
+                        measures_data.append({
+                            'id': measure.id,
+                            'name': measure.name,
+                            'weight': float(measure.weight or 0),
+                            'target': float(target),
+                            'achievement': float(achievement_record.achievement) if achievement_record else 0,
+                            'justification': achievement_record.justification if achievement_record else ''
+                        })
+
+                activities_data = []
+                for activity in activities:
+                    target = self._get_target_for_period(activity, report.report_type)
+                    if target and target > 0:
+                        achievement_record = report.activity_achievements.filter(main_activity=activity).first()
+                        activities_data.append({
+                            'id': activity.id,
+                            'name': activity.name,
+                            'weight': float(activity.weight or 0),
+                            'target': float(target),
+                            'achievement': float(achievement_record.achievement) if achievement_record else 0,
+                            'justification': achievement_record.justification if achievement_record else ''
+                        })
+
+                if measures_data or activities_data:
+                    initiatives_data.append({
+                        'id': initiative.id,
+                        'name': initiative.name,
+                        'weight': float(initiative.weight or 0),
+                        'performanceMeasures': measures_data,
+                        'mainActivities': activities_data
+                    })
+
+            if initiatives_data:
+                me_data.append({
+                    'id': objective.id,
+                    'title': objective.title,
+                    'weight': objective_weight,
+                    'initiatives': initiatives_data
+                })
+
+        return me_data
 
     @action(detail=True, methods=['get'])
     def debug_plan_structure(self, request, pk=None):
