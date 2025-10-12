@@ -1860,11 +1860,17 @@ class ReportViewSet(viewsets.ModelViewSet):
             plan_data = []
 
             for objective in objectives:
-                initiatives = objective.initiatives.filter(organization=plan.organization)
+                initiatives = objective.initiatives.filter(
+                    models.Q(organization=plan.organization) | models.Q(organization__isnull=True)
+                )
 
                 for initiative in initiatives:
-                    measures = initiative.performance_measures.filter(organization=plan.organization)
-                    activities = initiative.main_activities.filter(organization=plan.organization)
+                    measures = initiative.performance_measures.filter(
+                        models.Q(organization=plan.organization) | models.Q(organization__isnull=True)
+                    )
+                    activities = initiative.main_activities.filter(
+                        models.Q(organization=plan.organization) | models.Q(organization__isnull=True)
+                    )
 
                     initiative_data = {
                         'objective_id': objective.id,
@@ -1912,12 +1918,27 @@ class ReportViewSet(viewsets.ModelViewSet):
         if obj.target_type == 'QUARTERLY':
             if report_type == 'Q1':
                 return obj.q1_target
-            elif report_type in ['Q2', '6M']:
+            elif report_type == 'Q2':
                 return obj.q2_target
-            elif report_type in ['Q3', '9M']:
+            elif report_type == '6M':
+                q1 = obj.q1_target if obj.q1_target else 0
+                q2 = obj.q2_target if obj.q2_target else 0
+                return q1 + q2 if (q1 or q2) else None
+            elif report_type == 'Q3':
                 return obj.q3_target
-            elif report_type in ['Q4', 'YEARLY']:
+            elif report_type == '9M':
+                q1 = obj.q1_target if obj.q1_target else 0
+                q2 = obj.q2_target if obj.q2_target else 0
+                q3 = obj.q3_target if obj.q3_target else 0
+                return q1 + q2 + q3 if (q1 or q2 or q3) else None
+            elif report_type == 'Q4':
                 return obj.q4_target
+            elif report_type == 'YEARLY':
+                q1 = obj.q1_target if obj.q1_target else 0
+                q2 = obj.q2_target if obj.q2_target else 0
+                q3 = obj.q3_target if obj.q3_target else 0
+                q4 = obj.q4_target if obj.q4_target else 0
+                return q1 + q2 + q3 + q4 if (q1 or q2 or q3 or q4) else None
         elif obj.target_type == 'MONTHLY':
             months_mapping = {
                 'Q1': obj.selected_months[:3] if obj.selected_months else [],

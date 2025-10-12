@@ -345,9 +345,22 @@ const Reporting: React.FC = () => {
               <Loader className="h-6 w-6 animate-spin mr-2" />
               <span>Loading plan data...</span>
             </div>
+          ) : !planData?.plan_data || planData.plan_data.length === 0 ? (
+            <div className="text-center py-12 bg-yellow-50 rounded-lg border border-yellow-200">
+              <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Plan Data Found</h3>
+              <p className="text-gray-600 mb-4">
+                No targets were found for the selected report period. This could mean:
+              </p>
+              <ul className="text-left text-gray-600 max-w-md mx-auto list-disc list-inside space-y-1">
+                <li>The plan has no activities or performance measures</li>
+                <li>No targets were set for this reporting period</li>
+                <li>The plan structure may need to be reviewed</li>
+              </ul>
+            </div>
           ) : (
             <div className="space-y-6">
-              {planData?.plan_data?.map((initiative: ReportPlanData, idx: number) => (
+              {planData.plan_data.map((initiative: ReportPlanData, idx: number) => (
                 <div key={idx} className="border border-gray-200 rounded-lg p-4">
                   <div className="mb-4">
                     <h3 className="font-semibold text-lg">{initiative.objective_title}</h3>
