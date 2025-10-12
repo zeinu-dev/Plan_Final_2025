@@ -54,14 +54,20 @@ const getPerformanceLabel = (percentage: number): string => {
 };
 
 const calculateMeasureAchievement = (measure: PerformanceMeasureData) => {
-  const achievementPercent = measure.target > 0 ? (measure.achievement / measure.target) * 100 : 0;
-  const achievementByWeight = (measure.weight * achievementPercent) / 100;
+  const achievement = Number(measure.achievement) || 0;
+  const target = Number(measure.target) || 0;
+  const weight = Number(measure.weight) || 0;
+  const achievementPercent = target > 0 ? (achievement / target) * 100 : 0;
+  const achievementByWeight = (weight * achievementPercent) / 100;
   return { achievementPercent, achievementByWeight };
 };
 
 const calculateActivityAchievement = (activity: MainActivityData) => {
-  const achievementPercent = activity.target > 0 ? (activity.achievement / activity.target) * 100 : 0;
-  const achievementByWeight = (activity.weight * achievementPercent) / 100;
+  const achievement = Number(activity.achievement) || 0;
+  const target = Number(activity.target) || 0;
+  const weight = Number(activity.weight) || 0;
+  const achievementPercent = target > 0 ? (achievement / target) * 100 : 0;
+  const achievementByWeight = (weight * achievementPercent) / 100;
   return { achievementPercent, achievementByWeight };
 };
 
@@ -75,7 +81,8 @@ const calculateInitiativeAchievement = (initiative: InitiativeData) => {
   }, 0);
 
   const achievementByWeight = measuresWeight + activitiesWeight;
-  const achievementPercent = initiative.weight > 0 ? (achievementByWeight / initiative.weight) * 100 : 0;
+  const weight = Number(initiative.weight) || 0;
+  const achievementPercent = weight > 0 ? (achievementByWeight / weight) * 100 : 0;
 
   return { achievementByWeight, achievementPercent };
 };
@@ -85,7 +92,8 @@ const calculateObjectiveAchievement = (objective: ObjectiveData) => {
     return sum + calculateInitiativeAchievement(initiative).achievementByWeight;
   }, 0);
 
-  const achievementPercent = objective.weight > 0 ? (achievementByWeight / objective.weight) * 100 : 0;
+  const weight = Number(objective.weight) || 0;
+  const achievementPercent = weight > 0 ? (achievementByWeight / weight) * 100 : 0;
 
   return { achievementByWeight, achievementPercent };
 };
@@ -120,7 +128,7 @@ export const MEReportTable: React.FC<MEReportTableProps> = ({ objectives }) => {
                     Strategic Objective: {objective.title}
                   </h3>
                   <p className="text-sm text-blue-700 mt-1">
-                    Weight: {objective.weight.toFixed(2)}%
+                    Weight: {Number(objective.weight).toFixed(2)}%
                   </p>
                 </div>
                 <div className="text-right">
@@ -147,7 +155,7 @@ export const MEReportTable: React.FC<MEReportTableProps> = ({ objectives }) => {
                             Strategic Initiative: {initiative.name}
                           </h4>
                           <p className="text-sm text-indigo-700">
-                            Weight: {initiative.weight.toFixed(2)}%
+                            Weight: {Number(initiative.weight).toFixed(2)}%
                           </p>
                         </div>
                         <div className="text-right">
@@ -185,9 +193,9 @@ export const MEReportTable: React.FC<MEReportTableProps> = ({ objectives }) => {
                                   return (
                                     <tr key={measure.id}>
                                       <td className="px-3 py-2 text-gray-900">{measure.name}</td>
-                                      <td className="px-3 py-2 text-center text-gray-700">{measure.weight.toFixed(2)}%</td>
-                                      <td className="px-3 py-2 text-center text-gray-700">{measure.target.toFixed(2)}</td>
-                                      <td className="px-3 py-2 text-center text-gray-900 font-medium">{measure.achievement.toFixed(2)}</td>
+                                      <td className="px-3 py-2 text-center text-gray-700">{Number(measure.weight).toFixed(2)}%</td>
+                                      <td className="px-3 py-2 text-center text-gray-700">{Number(measure.target).toFixed(2)}</td>
+                                      <td className="px-3 py-2 text-center text-gray-900 font-medium">{Number(measure.achievement || 0).toFixed(2)}</td>
                                       <td className="px-3 py-2 text-center">
                                         <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${getPerformanceColor(achievementPercent)}`}>
                                           {achievementPercent.toFixed(2)}%
@@ -227,9 +235,9 @@ export const MEReportTable: React.FC<MEReportTableProps> = ({ objectives }) => {
                                   return (
                                     <tr key={activity.id}>
                                       <td className="px-3 py-2 text-gray-900">{activity.name}</td>
-                                      <td className="px-3 py-2 text-center text-gray-700">{activity.weight.toFixed(2)}%</td>
-                                      <td className="px-3 py-2 text-center text-gray-700">{activity.target.toFixed(2)}</td>
-                                      <td className="px-3 py-2 text-center text-gray-900 font-medium">{activity.achievement.toFixed(2)}</td>
+                                      <td className="px-3 py-2 text-center text-gray-700">{Number(activity.weight).toFixed(2)}%</td>
+                                      <td className="px-3 py-2 text-center text-gray-700">{Number(activity.target).toFixed(2)}</td>
+                                      <td className="px-3 py-2 text-center text-gray-900 font-medium">{Number(activity.achievement || 0).toFixed(2)}</td>
                                       <td className="px-3 py-2 text-center">
                                         <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${getPerformanceColor(achievementPercent)}`}>
                                           {achievementPercent.toFixed(2)}%
