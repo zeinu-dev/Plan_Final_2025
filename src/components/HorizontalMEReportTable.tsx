@@ -13,6 +13,19 @@ interface PerformanceMeasureData {
   justification?: string;
 }
 
+interface SubActivityBudgetData {
+  id: number;
+  name: string;
+  government_treasury: number;
+  sdg_funding: number;
+  partners_funding: number;
+  other_funding: number;
+  government_treasury_utilized: number;
+  sdg_funding_utilized: number;
+  partners_funding_utilized: number;
+  other_funding_utilized: number;
+}
+
 interface MainActivityData {
   id: number;
   name: string;
@@ -20,6 +33,7 @@ interface MainActivityData {
   target: number;
   achievement: number;
   justification?: string;
+  subActivities?: SubActivityBudgetData[];
 }
 
 interface InitiativeData {
@@ -358,6 +372,15 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                 Justification
               </th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider bg-blue-100">
+                Total Budget
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider bg-green-100">
+                Budget Utilized
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider bg-yellow-100">
+                Remaining Budget
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -387,6 +410,9 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
                       {objAchievement.achievementByWeight.toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-gray-500">—</td>
+                    <td className="px-4 py-3 text-center text-gray-500 bg-blue-50">—</td>
+                    <td className="px-4 py-3 text-center text-gray-500 bg-blue-50">—</td>
+                    <td className="px-4 py-3 text-center text-gray-500 bg-blue-50">—</td>
                   </tr>
 
                   {objective.initiatives.map((initiative) => {
@@ -415,6 +441,9 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
                             {initAchievement.achievementByWeight.toFixed(2)}
                           </td>
                           <td className="px-4 py-3 text-gray-500">—</td>
+                          <td className="px-4 py-3 text-center text-gray-500 bg-indigo-50">—</td>
+                          <td className="px-4 py-3 text-center text-gray-500 bg-indigo-50">—</td>
+                          <td className="px-4 py-3 text-center text-gray-500 bg-indigo-50">—</td>
                         </tr>
 
                         {initiative.performanceMeasures.map((measure) => {
@@ -448,6 +477,9 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
                               <td className="px-4 py-2 text-xs text-gray-600">
                                 {measure.justification || '—'}
                               </td>
+                              <td className="px-4 py-2 text-center text-gray-500">—</td>
+                              <td className="px-4 py-2 text-center text-gray-500">—</td>
+                              <td className="px-4 py-2 text-center text-gray-500">—</td>
                             </tr>
                           );
                         })}
@@ -455,35 +487,91 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
                         {initiative.mainActivities.map((activity) => {
                           const { achievementPercent, achievementByWeight } = calculateActivityAchievement(activity);
 
+                          const totalBudget = (activity.subActivities || []).reduce((sum, sub) =>
+                            sum + sub.government_treasury + sub.sdg_funding + sub.partners_funding + sub.other_funding, 0);
+                          const totalUtilized = (activity.subActivities || []).reduce((sum, sub) =>
+                            sum + sub.government_treasury_utilized + sub.sdg_funding_utilized +
+                            sub.partners_funding_utilized + sub.other_funding_utilized, 0);
+                          const totalRemaining = totalBudget - totalUtilized;
+
                           return (
-                            <tr key={`ma-${activity.id}`} className="hover:bg-gray-50">
-                              <td className="px-4 py-2 pl-12 text-gray-900 sticky left-0 bg-white z-10">
-                                {activity.name}
-                              </td>
-                              <td className="px-4 py-2 text-center text-xs text-gray-600">
-                                Main Activity
-                              </td>
-                              <td className="px-4 py-2 text-center text-gray-700">
-                                {Number(activity.weight).toFixed(2)}%
-                              </td>
-                              <td className="px-4 py-2 text-center text-gray-700">
-                                {Number(activity.target).toFixed(2)}
-                              </td>
-                              <td className="px-4 py-2 text-center font-medium text-gray-900">
-                                {Number(activity.achievement || 0).toFixed(2)}
-                              </td>
-                              <td className="px-4 py-2 text-center">
-                                <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${getPerformanceColor(achievementPercent)}`}>
-                                  {achievementPercent.toFixed(2)}%
-                                </span>
-                              </td>
-                              <td className="px-4 py-2 text-center text-gray-700">
-                                {achievementByWeight.toFixed(2)}
-                              </td>
-                              <td className="px-4 py-2 text-xs text-gray-600">
-                                {activity.justification || '—'}
-                              </td>
-                            </tr>
+                            <React.Fragment key={`ma-${activity.id}`}>
+                              <tr className="hover:bg-gray-50">
+                                <td className="px-4 py-2 pl-12 text-gray-900 sticky left-0 bg-white z-10">
+                                  {activity.name}
+                                </td>
+                                <td className="px-4 py-2 text-center text-xs text-gray-600">
+                                  Main Activity
+                                </td>
+                                <td className="px-4 py-2 text-center text-gray-700">
+                                  {Number(activity.weight).toFixed(2)}%
+                                </td>
+                                <td className="px-4 py-2 text-center text-gray-700">
+                                  {Number(activity.target).toFixed(2)}
+                                </td>
+                                <td className="px-4 py-2 text-center font-medium text-gray-900">
+                                  {Number(activity.achievement || 0).toFixed(2)}
+                                </td>
+                                <td className="px-4 py-2 text-center">
+                                  <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${getPerformanceColor(achievementPercent)}`}>
+                                    {achievementPercent.toFixed(2)}%
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2 text-center text-gray-700">
+                                  {achievementByWeight.toFixed(2)}
+                                </td>
+                                <td className="px-4 py-2 text-xs text-gray-600">
+                                  {activity.justification || '—'}
+                                </td>
+                                <td className="px-4 py-2 text-center font-semibold text-gray-900 bg-blue-50">
+                                  {totalBudget.toFixed(2)}
+                                </td>
+                                <td className="px-4 py-2 text-center font-semibold text-gray-900 bg-green-50">
+                                  {totalUtilized.toFixed(2)}
+                                </td>
+                                <td className="px-4 py-2 text-center font-semibold bg-yellow-50">
+                                  <span className={totalRemaining < 0 ? 'text-red-600 font-bold' : 'text-gray-900'}>
+                                    {totalRemaining.toFixed(2)}
+                                  </span>
+                                </td>
+                              </tr>
+
+                              {(activity.subActivities || []).map((subActivity) => {
+                                const subTotalBudget = subActivity.government_treasury + subActivity.sdg_funding +
+                                                       subActivity.partners_funding + subActivity.other_funding;
+                                const subTotalUtilized = subActivity.government_treasury_utilized + subActivity.sdg_funding_utilized +
+                                                         subActivity.partners_funding_utilized + subActivity.other_funding_utilized;
+                                const subTotalRemaining = subTotalBudget - subTotalUtilized;
+
+                                return (
+                                  <tr key={`sub-${subActivity.id}`} className="bg-gray-50 hover:bg-gray-100">
+                                    <td className="px-4 py-2 pl-16 text-sm text-gray-700 sticky left-0 bg-gray-50 z-10">
+                                      {subActivity.name}
+                                    </td>
+                                    <td className="px-4 py-2 text-center text-xs text-gray-500">
+                                      Sub-Activity
+                                    </td>
+                                    <td className="px-4 py-2 text-center text-gray-500">—</td>
+                                    <td className="px-4 py-2 text-center text-gray-500">—</td>
+                                    <td className="px-4 py-2 text-center text-gray-500">—</td>
+                                    <td className="px-4 py-2 text-center text-gray-500">—</td>
+                                    <td className="px-4 py-2 text-center text-gray-500">—</td>
+                                    <td className="px-4 py-2 text-center text-gray-500">—</td>
+                                    <td className="px-4 py-2 text-center text-sm text-gray-700 bg-blue-50">
+                                      {subTotalBudget.toFixed(2)}
+                                    </td>
+                                    <td className="px-4 py-2 text-center text-sm text-gray-700 bg-green-50">
+                                      {subTotalUtilized.toFixed(2)}
+                                    </td>
+                                    <td className="px-4 py-2 text-center text-sm bg-yellow-50">
+                                      <span className={subTotalRemaining < 0 ? 'text-red-600 font-semibold' : 'text-gray-700'}>
+                                        {subTotalRemaining.toFixed(2)}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </React.Fragment>
                           );
                         })}
                       </React.Fragment>
