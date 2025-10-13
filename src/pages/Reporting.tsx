@@ -247,10 +247,19 @@ const Reporting: React.FC = () => {
     mutationFn: async (utilizations: any[]) => {
       if (!reportId) throw new Error('No report ID');
 
-      await api.post('/budget-utilizations/bulk_create_or_update/', {
+      console.log('Saving budget utilizations:', {
+        report_id: reportId,
+        budget_utilizations: utilizations,
+        count: utilizations.length
+      });
+
+      const response = await api.post('/budget-utilizations/bulk_create_or_update/', {
         report_id: reportId,
         budget_utilizations: utilizations
       });
+
+      console.log('Save response:', response);
+      return response;
     },
     onSuccess: () => {
       setStep(4);
@@ -258,7 +267,11 @@ const Reporting: React.FC = () => {
       setTimeout(() => setSuccess(null), 3000);
     },
     onError: (err: any) => {
-      setError('Failed to save budget utilization');
+      console.error('Failed to save budget utilization:', err);
+      console.error('Error response:', err.response?.data);
+      console.error('Error status:', err.response?.status);
+      const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to save budget utilization';
+      setError(errorMsg);
       setTimeout(() => setError(null), 5000);
     }
   });
