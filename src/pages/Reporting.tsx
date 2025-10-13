@@ -312,18 +312,39 @@ const Reporting: React.FC = () => {
     mutationFn: async () => {
       if (!reportId) throw new Error('No report ID');
 
-      if (narrativeFile) {
-        const formData = new FormData();
-        formData.append('narrative_report', narrativeFile);
-        await api.patch(`/reports/${reportId}/`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-      }
+      console.log('=== SUBMITTING REPORT ===');
+      console.log('Report ID:', reportId);
+      console.log('Current report status:', currentReport?.status);
+      console.log('Has narrative file:', !!narrativeFile);
 
-      if (currentReport?.status === 'REJECTED') {
-        await api.post(`/reports/${reportId}/resubmit/`);
-      } else {
-        await api.post(`/reports/${reportId}/submit/`);
+      try {
+        if (narrativeFile) {
+          console.log('Uploading narrative file:', narrativeFile.name);
+          const formData = new FormData();
+          formData.append('narrative_report', narrativeFile);
+
+          const uploadResponse = await api.patch(`/reports/${reportId}/`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          console.log('File upload response:', uploadResponse);
+        }
+
+        if (currentReport?.status === 'REJECTED') {
+          console.log('Resubmitting rejected report');
+          const resubmitResponse = await api.post(`/reports/${reportId}/resubmit/`);
+          console.log('Resubmit response:', resubmitResponse);
+          return resubmitResponse;
+        } else {
+          console.log('Submitting new report');
+          const submitResponse = await api.post(`/reports/${reportId}/submit/`);
+          console.log('Submit response:', submitResponse);
+          return submitResponse;
+        }
+      } catch (error: any) {
+        console.error('Error during report submission:', error);
+        console.error('Error response:', error.response?.data);
+        console.error('Error status:', error.response?.status);
+        throw error;
       }
     },
     onSuccess: () => {
@@ -331,8 +352,22 @@ const Reporting: React.FC = () => {
       setStep(5);
     },
     onError: (err: any) => {
-      setError('Failed to submit report');
-      setTimeout(() => setError(null), 5000);
+      console.error('Submit mutation error:', err);
+
+      let errorMessage = 'Failed to submit report';
+
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setError(errorMessage);
+      setTimeout(() => setError(null), 8000);
     }
   });
 

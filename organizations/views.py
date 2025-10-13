@@ -1772,6 +1772,26 @@ class ReportViewSet(viewsets.ModelViewSet):
 
         return queryset.filter(organization__in=user_org_ids)
 
+    def update(self, request, *args, **kwargs):
+        try:
+            partial = kwargs.pop('partial', False)
+            instance = self.get_object()
+
+            logger.info(f"Updating report {instance.id} - Partial: {partial}")
+            logger.info(f"Request data keys: {request.data.keys()}")
+            logger.info(f"Request FILES keys: {request.FILES.keys()}")
+
+            serializer = self.get_serializer(instance, data=request.data, partial=partial)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+
+            logger.info(f"Report {instance.id} updated successfully")
+            return Response(serializer.data)
+
+        except Exception as e:
+            logger.exception(f"Error updating report {kwargs.get('pk')}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     def create(self, request, *args, **kwargs):
         try:
             plan_id = request.data.get('plan')
@@ -1853,22 +1873,28 @@ class ReportViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
         try:
+            logger.info(f"Attempting to submit report {pk}")
             report = self.get_object()
+            logger.info(f"Report found - Status: {report.status}, ID: {report.id}")
 
             if report.status == 'SUBMITTED':
+                logger.warning(f"Report {pk} is already submitted")
                 return Response({'error': 'Report already submitted'}, status=status.HTTP_400_BAD_REQUEST)
 
             if report.status == 'APPROVED':
+                logger.warning(f"Report {pk} is already approved")
                 return Response({'error': 'Report already approved'}, status=status.HTTP_400_BAD_REQUEST)
 
+            logger.info(f"Updating report {pk} status to SUBMITTED")
             report.status = 'SUBMITTED'
             report.submitted_at = timezone.now()
             report.save()
+            logger.info(f"Report {pk} submitted successfully")
 
             return Response({'message': 'Report submitted successfully'}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.exception("Error submitting report")
+            logger.exception(f"Error submitting report {pk}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'])
@@ -1965,20 +1991,25 @@ class ReportViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def resubmit(self, request, pk=None):
         try:
+            logger.info(f"Attempting to resubmit report {pk}")
             report = self.get_object()
+            logger.info(f"Report found - Status: {report.status}, ID: {report.id}")
 
             if report.status != 'REJECTED':
+                logger.warning(f"Report {pk} status is {report.status}, not REJECTED")
                 return Response({'error': 'Can only resubmit rejected reports'}, status=status.HTTP_400_BAD_REQUEST)
 
+            logger.info(f"Resubmitting report {pk}")
             report.status = 'SUBMITTED'
             report.submitted_at = timezone.now()
             report.evaluated_at = None
             report.save()
+            logger.info(f"Report {pk} resubmitted successfully")
 
             return Response({'message': 'Report resubmitted successfully'}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.exception("Error resubmitting report")
+            logger.exception(f"Error resubmitting report {pk}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['get'])
