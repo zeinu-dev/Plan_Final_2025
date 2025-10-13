@@ -1777,23 +1777,34 @@ class ReportViewSet(viewsets.ModelViewSet):
             plan_id = request.data.get('plan')
             report_type = request.data.get('report_type')
 
+            logger.info(f"Report creation requested - Plan ID: {plan_id}, Report Type: {report_type}")
+
             if not plan_id or not report_type:
                 return Response({'error': 'Plan and report type are required'}, status=status.HTTP_400_BAD_REQUEST)
 
             existing_report = Report.objects.filter(plan_id=plan_id, report_type=report_type).first()
             if existing_report:
-                if existing_report.submitted_at:
-                    return Response({'error': 'A report for this period has already been submitted. You cannot modify it.'}, status=status.HTTP_400_BAD_REQUEST)
+                logger.info(f"Found existing report {existing_report.id} with status {existing_report.status}")
+                if existing_report.status == 'SUBMITTED':
+                    return Response({
+                        'error': 'This report has already been submitted and is awaiting evaluation. You cannot modify it.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                if existing_report.status == 'APPROVED':
+                    return Response({
+                        'error': 'This report has been approved and cannot be modified.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
                 serializer = self.get_serializer(existing_report)
                 return Response(serializer.data, status=status.HTTP_200_OK)
 
             plan = Plan.objects.get(id=plan_id)
+            logger.info(f"Plan found - Status: {plan.status}, Start: {plan.from_date}, End: {plan.to_date}")
 
             if plan.status != 'APPROVED':
                 return Response({'error': 'Can only create reports for approved plans'}, status=status.HTTP_400_BAD_REQUEST)
 
-            from datetime import date, timedelta
+            from datetime import date
             from dateutil.relativedelta import relativedelta
 
             current_date = date.today()
@@ -1815,18 +1826,25 @@ class ReportViewSet(viewsets.ModelViewSet):
             elif report_type == 'YEARLY':
                 report_period_end = plan.to_date
 
+            logger.info(f"Report type: {report_type}, Period end: {report_period_end}, Current date: {current_date}")
+
             if report_period_end and current_date < report_period_end:
+                error_msg = f'You are not allowed to report now. The reporting period for {report_type} has not ended yet. Please wait until {report_period_end.strftime("%B %d, %Y")}.'
+                logger.warning(f"Report creation blocked: {error_msg}")
                 return Response({
-                    'error': f'Report period has not ended yet. Please wait until {report_period_end.strftime("%Y-%m-%d")}',
-                    'report_period_end': report_period_end.strftime("%Y-%m-%d")
+                    'error': error_msg,
+                    'report_period_end': report_period_end.strftime("%Y-%m-%d"),
+                    'current_date': current_date.strftime("%Y-%m-%d")
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             request.data['organization'] = plan.organization.id
             request.data['planner'] = request.user.id
 
+            logger.info(f"Creating report for plan {plan_id}, type {report_type}")
             return super().create(request, *args, **kwargs)
 
         except Plan.DoesNotExist:
+            logger.error(f"Plan {plan_id} not found")
             return Response({'error': 'Plan not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.exception("Error creating report")

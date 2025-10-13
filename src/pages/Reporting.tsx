@@ -204,9 +204,23 @@ const Reporting: React.FC = () => {
       setTimeout(() => setSuccess(null), 3000);
     },
     onError: (err: any) => {
-      const errorMessage = err.message || err.response?.data?.error || err.response?.data?.non_field_errors?.[0] || 'Failed to create report';
+      console.error('Report creation error:', err);
+      console.error('Error response:', err.response?.data);
+
+      let errorMessage = 'Failed to create report';
+
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.response?.data?.non_field_errors?.[0]) {
+        errorMessage = err.response.data.non_field_errors[0];
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
       setError(errorMessage);
-      setTimeout(() => setError(null), 5000);
+      setTimeout(() => setError(null), 8000);
     }
   });
 
