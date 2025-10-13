@@ -50,7 +50,7 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
     field: keyof Omit<BudgetUtilization, 'sub_activity'>,
     value: string
   ) => {
-    const numValue = parseFloat(value) || 0;
+    const numValue = value === '' ? 0 : (parseFloat(value) || 0);
 
     setUtilizations(prev => ({
       ...prev,
@@ -70,7 +70,15 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
   const handleSubmit = async () => {
     setIsSaving(true);
     try {
-      const utilizationArray = Object.values(utilizations);
+      const utilizationArray = Object.values(utilizations).map(util => ({
+        sub_activity: util.sub_activity,
+        government_treasury_utilized: Number(util.government_treasury_utilized) || 0,
+        sdg_funding_utilized: Number(util.sdg_funding_utilized) || 0,
+        partners_funding_utilized: Number(util.partners_funding_utilized) || 0,
+        other_funding_utilized: Number(util.other_funding_utilized) || 0,
+      }));
+
+      console.log('Submitting utilizations:', utilizationArray);
       await onSave(utilizationArray);
     } finally {
       setIsSaving(false);
