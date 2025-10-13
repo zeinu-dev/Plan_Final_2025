@@ -96,7 +96,7 @@ const Reporting: React.FC = () => {
 
       return response.data;
     },
-    enabled: !!reportId && (step === 2 || step === 4),
+    enabled: !!reportId && (step === 2 || step === 3 || step === 4),
     retry: 1
   });
 
@@ -105,7 +105,7 @@ const Reporting: React.FC = () => {
     console.log('=== QUERY CONDITIONS ===');
     console.log('reportId:', reportId);
     console.log('step:', step);
-    console.log('enabled:', !!reportId && step === 2);
+    console.log('enabled:', !!reportId && (step === 2 || step === 3 || step === 4));
     console.log('isLoadingPlan:', isLoadingPlan);
     console.log('planData:', planData);
   }, [reportId, step, isLoadingPlan, planData]);

@@ -124,9 +124,20 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
     return (
       <div className="text-center py-12 bg-yellow-50 rounded-lg border border-yellow-200">
         <h3 className="text-lg font-medium text-gray-900 mb-2">No Sub-Activities Found</h3>
-        <p className="text-gray-600">
+        <p className="text-gray-600 mb-4">
           No sub-activities with budget allocations were found for this plan.
         </p>
+        <div className="text-left max-w-2xl mx-auto bg-white p-4 rounded border border-yellow-300 text-sm">
+          <p className="font-semibold mb-2">Debug Information:</p>
+          <ul className="list-disc list-inside space-y-1 text-gray-700">
+            <li>Plan data exists: {planData ? 'Yes' : 'No'}</li>
+            <li>Number of initiatives: {planData?.plan_data?.length || 0}</li>
+            <li>Number of main activities: {
+              planData?.plan_data?.reduce((sum, init) => sum + (init.main_activities?.length || 0), 0) || 0
+            }</li>
+            <li>Check browser console for detailed logs</li>
+          </ul>
+        </div>
       </div>
     );
   }
