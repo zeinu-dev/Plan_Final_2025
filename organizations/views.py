@@ -2003,35 +2003,16 @@ class ReportViewSet(viewsets.ModelViewSet):
 
                             for sub_activity in sub_activities_qs:
                                 logger.info(f"Processing sub-activity {sub_activity.id}: {sub_activity.name}")
-
-                                # Get budget from ActivityBudget model using sub_activity_id reference
-                                activity_budget = ActivityBudget.objects.filter(
-                                    sub_activity_id=str(sub_activity.id)
-                                ).first()
-
-                                if activity_budget:
-                                    logger.info(f"Found ActivityBudget for sub-activity {sub_activity.id}")
-                                    government_treasury = float(activity_budget.government_treasury)
-                                    sdg_funding = float(activity_budget.sdg_funding)
-                                    partners_funding = float(activity_budget.partners_funding)
-                                    other_funding = float(activity_budget.other_funding)
-                                else:
-                                    logger.warning(f"No ActivityBudget found for sub-activity {sub_activity.id}, using SubActivity fields")
-                                    government_treasury = float(sub_activity.government_treasury)
-                                    sdg_funding = float(sub_activity.sdg_funding)
-                                    partners_funding = float(sub_activity.partners_funding)
-                                    other_funding = float(sub_activity.other_funding)
-
-                                logger.info(f"Budget for {sub_activity.name}: Treasury={government_treasury}, SDG={sdg_funding}, Partners={partners_funding}, Other={other_funding}")
+                                logger.info(f"Budget values - Treasury: {sub_activity.government_treasury}, SDG: {sub_activity.sdg_funding}, Partners: {sub_activity.partners_funding}, Other: {sub_activity.other_funding}")
 
                                 sub_activities_data.append({
                                     'id': sub_activity.id,
                                     'name': sub_activity.name,
                                     'activity_type': sub_activity.activity_type,
-                                    'government_treasury': government_treasury,
-                                    'sdg_funding': sdg_funding,
-                                    'partners_funding': partners_funding,
-                                    'other_funding': other_funding,
+                                    'government_treasury': float(sub_activity.government_treasury),
+                                    'sdg_funding': float(sub_activity.sdg_funding),
+                                    'partners_funding': float(sub_activity.partners_funding),
+                                    'other_funding': float(sub_activity.other_funding),
                                 })
 
                             logger.info(f"Total sub_activities_data items: {len(sub_activities_data)}")
