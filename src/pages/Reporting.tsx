@@ -318,26 +318,55 @@ const Reporting: React.FC = () => {
       console.log('Has narrative file:', !!narrativeFile);
 
       try {
+        let fileUploadWarning = null;
+
         if (narrativeFile) {
           console.log('Uploading narrative file:', narrativeFile.name);
-          const formData = new FormData();
-          formData.append('narrative_report', narrativeFile);
+          try {
+            const formData = new FormData();
+            formData.append('narrative_report', narrativeFile);
 
-          const uploadResponse = await api.patch(`/reports/${reportId}/`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          });
-          console.log('File upload response:', uploadResponse);
+            const uploadResponse = await api.patch(`/reports/${reportId}/`, formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            console.log('File upload response:', uploadResponse);
+
+            // Check if there's a warning about file upload
+            if (uploadResponse.data?.warning) {
+              fileUploadWarning = uploadResponse.data.warning;
+              console.warn('File upload warning:', fileUploadWarning);
+            }
+          } catch (uploadError: any) {
+            console.error('File upload failed:', uploadError);
+            // Check if it's a permission error
+            if (uploadError.response?.data?.error?.includes('Permission denied') ||
+                uploadError.response?.data?.error?.includes('Errno 13')) {
+              console.warn('Continuing without file upload due to permission error');
+              fileUploadWarning = 'File upload failed due to server permissions. Report will be submitted without the file.';
+            } else {
+              // For other errors, re-throw
+              throw uploadError;
+            }
+          }
         }
 
         if (currentReport?.status === 'REJECTED') {
           console.log('Resubmitting rejected report');
           const resubmitResponse = await api.post(`/reports/${reportId}/resubmit/`);
           console.log('Resubmit response:', resubmitResponse);
+
+          if (fileUploadWarning) {
+            return { ...resubmitResponse, fileWarning: fileUploadWarning };
+          }
           return resubmitResponse;
         } else {
           console.log('Submitting new report');
           const submitResponse = await api.post(`/reports/${reportId}/submit/`);
           console.log('Submit response:', submitResponse);
+
+          if (fileUploadWarning) {
+            return { ...submitResponse, fileWarning: fileUploadWarning };
+          }
           return submitResponse;
         }
       } catch (error: any) {
@@ -347,8 +376,12 @@ const Reporting: React.FC = () => {
         throw error;
       }
     },
-    onSuccess: () => {
-      setSuccess('Report submitted successfully!');
+    onSuccess: (data: any) => {
+      if (data?.fileWarning) {
+        setSuccess(`Report submitted successfully! Note: ${data.fileWarning}`);
+      } else {
+        setSuccess('Report submitted successfully!');
+      }
       setStep(5);
     },
     onError: (err: any) => {
