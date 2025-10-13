@@ -1998,7 +1998,11 @@ class ReportViewSet(viewsets.ModelViewSet):
 
                         if target is not None and target > 0:
                             sub_activities_data = []
-                            for sub_activity in activity.sub_activities.all():
+                            sub_activities_qs = activity.sub_activities.all()
+                            logger.info(f"Activity {activity.id} has {sub_activities_qs.count()} sub-activities")
+
+                            for sub_activity in sub_activities_qs:
+                                logger.info(f"Adding sub-activity {sub_activity.id}: {sub_activity.name}")
                                 sub_activities_data.append({
                                     'id': sub_activity.id,
                                     'name': sub_activity.name,
@@ -2008,6 +2012,8 @@ class ReportViewSet(viewsets.ModelViewSet):
                                     'partners_funding': float(sub_activity.partners_funding),
                                     'other_funding': float(sub_activity.other_funding),
                                 })
+
+                            logger.info(f"Total sub_activities_data items: {len(sub_activities_data)}")
 
                             initiative_data['main_activities'].append({
                                 'id': activity.id,
