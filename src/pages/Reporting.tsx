@@ -228,23 +228,38 @@ const Reporting: React.FC = () => {
     mutationFn: async () => {
       if (!reportId) throw new Error('No report ID');
 
-      const performancePromises = Object.values(performanceAchievements).map(achievement => {
-        if (achievement.id) {
-          return api.put(`/performance-achievements/${achievement.id}/`, achievement);
-        } else {
-          return api.post('/performance-achievements/', achievement);
-        }
+      const performanceAchievementsList = Object.values(performanceAchievements);
+      const activityAchievementsList = Object.values(activityAchievements);
+
+      console.log('Saving achievements:', {
+        report_id: reportId,
+        performance_count: performanceAchievementsList.length,
+        activity_count: activityAchievementsList.length
       });
 
-      const activityPromises = Object.values(activityAchievements).map(achievement => {
-        if (achievement.id) {
-          return api.put(`/activity-achievements/${achievement.id}/`, achievement);
-        } else {
-          return api.post('/activity-achievements/', achievement);
-        }
-      });
+      const promises = [];
 
-      await Promise.all([...performancePromises, ...activityPromises]);
+      if (performanceAchievementsList.length > 0) {
+        promises.push(
+          api.post('/performance-achievements/bulk_create_or_update/', {
+            report_id: reportId,
+            achievements: performanceAchievementsList
+          })
+        );
+      }
+
+      if (activityAchievementsList.length > 0) {
+        promises.push(
+          api.post('/activity-achievements/bulk_create_or_update/', {
+            report_id: reportId,
+            achievements: activityAchievementsList
+          })
+        );
+      }
+
+      const results = await Promise.all(promises);
+      console.log('Save results:', results);
+      return results;
     },
     onSuccess: () => {
       setStep(3);
@@ -252,8 +267,11 @@ const Reporting: React.FC = () => {
       setTimeout(() => setSuccess(null), 3000);
     },
     onError: (err: any) => {
-      setError('Failed to save achievements');
-      setTimeout(() => setError(null), 5000);
+      console.error('Failed to save achievements:', err);
+      console.error('Error response:', err.response?.data);
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to save achievements';
+      setError(errorMsg);
+      setTimeout(() => setError(null), 8000);
     }
   });
 

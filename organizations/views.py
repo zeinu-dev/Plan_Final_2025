@@ -2348,6 +2348,44 @@ class PerformanceAchievementViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(report_id=report_id)
         return queryset
 
+    @action(detail=False, methods=['post'])
+    def bulk_create_or_update(self, request):
+        try:
+            achievements = request.data.get('achievements', [])
+            report_id = request.data.get('report_id')
+
+            if not report_id:
+                return Response({'error': 'Report ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            created_or_updated = []
+
+            with transaction.atomic():
+                for achievement_data in achievements:
+                    performance_measure_id = achievement_data.get('performance_measure')
+
+                    if not performance_measure_id:
+                        continue
+
+                    obj, created = PerformanceAchievement.objects.update_or_create(
+                        report_id=report_id,
+                        performance_measure_id=performance_measure_id,
+                        defaults={
+                            'achievement': achievement_data.get('achievement', 0),
+                            'justification': achievement_data.get('justification', ''),
+                        }
+                    )
+                    created_or_updated.append(obj)
+
+            serializer = self.get_serializer(created_or_updated, many=True)
+            return Response({
+                'message': f'Successfully saved {len(created_or_updated)} performance achievements',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("Error in bulk create/update performance achievements")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class ActivityAchievementViewSet(viewsets.ModelViewSet):
     queryset = ActivityAchievement.objects.all().select_related('report', 'main_activity')
@@ -2360,6 +2398,44 @@ class ActivityAchievementViewSet(viewsets.ModelViewSet):
         if report_id:
             queryset = queryset.filter(report_id=report_id)
         return queryset
+
+    @action(detail=False, methods=['post'])
+    def bulk_create_or_update(self, request):
+        try:
+            achievements = request.data.get('achievements', [])
+            report_id = request.data.get('report_id')
+
+            if not report_id:
+                return Response({'error': 'Report ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            created_or_updated = []
+
+            with transaction.atomic():
+                for achievement_data in achievements:
+                    main_activity_id = achievement_data.get('main_activity')
+
+                    if not main_activity_id:
+                        continue
+
+                    obj, created = ActivityAchievement.objects.update_or_create(
+                        report_id=report_id,
+                        main_activity_id=main_activity_id,
+                        defaults={
+                            'achievement': achievement_data.get('achievement', 0),
+                            'justification': achievement_data.get('justification', ''),
+                        }
+                    )
+                    created_or_updated.append(obj)
+
+            serializer = self.get_serializer(created_or_updated, many=True)
+            return Response({
+                'message': f'Successfully saved {len(created_or_updated)} activity achievements',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("Error in bulk create/update activity achievements")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class SubActivityBudgetUtilizationViewSet(viewsets.ModelViewSet):
