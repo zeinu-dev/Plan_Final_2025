@@ -1396,3 +1396,58 @@ class ActivityAchievement(models.Model):
 
     def __str__(self):
         return f"{self.main_activity.name} - {self.achievement}"
+
+
+class SubActivityBudgetUtilization(models.Model):
+    report = models.ForeignKey(
+        Report,
+        on_delete=models.CASCADE,
+        related_name='budget_utilizations'
+    )
+    sub_activity = models.ForeignKey(
+        SubActivity,
+        on_delete=models.CASCADE,
+        related_name='budget_utilizations'
+    )
+    government_treasury_utilized = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Amount utilized from government treasury"
+    )
+    sdg_funding_utilized = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Amount utilized from SDG funding"
+    )
+    partners_funding_utilized = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Amount utilized from partner funding"
+    )
+    other_funding_utilized = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Amount utilized from other funding sources"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'subactivity_budget_utilization'
+        unique_together = ('report', 'sub_activity')
+        ordering = ['sub_activity']
+
+    def __str__(self):
+        return f"{self.sub_activity.name} - Report {self.report.id}"
+
+    def get_total_utilized(self):
+        return (
+            self.government_treasury_utilized +
+            self.sdg_funding_utilized +
+            self.partners_funding_utilized +
+            self.other_funding_utilized
+        )

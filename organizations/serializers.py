@@ -10,7 +10,7 @@ from .models import (
     Location, LandTransport, AirTransport, PerDiem, Accommodation,
     ParticipantCost, SessionCost, PrintingCost, SupervisorCost,
     ProcurementItem, Plan, PlanReview, SubActivity, Report,
-    PerformanceAchievement, ActivityAchievement
+    PerformanceAchievement, ActivityAchievement, SubActivityBudgetUtilization
 )
 from decimal import Decimal, InvalidOperation
 import json
@@ -702,6 +702,27 @@ class ActivityAchievementSerializer(serializers.ModelSerializer):
         model = ActivityAchievement
         fields = ['id', 'report', 'main_activity', 'main_activity_name', 'achievement', 'justification', 'created_at', 'updated_at']
 
+class SubActivityBudgetUtilizationSerializer(serializers.ModelSerializer):
+    sub_activity_name = serializers.CharField(source='sub_activity.name', read_only=True)
+    main_activity_id = serializers.IntegerField(source='sub_activity.main_activity.id', read_only=True)
+    main_activity_name = serializers.CharField(source='sub_activity.main_activity.name', read_only=True)
+    total_utilized = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True, source='get_total_utilized')
+
+    government_treasury = serializers.DecimalField(max_digits=12, decimal_places=2, source='sub_activity.government_treasury', read_only=True)
+    sdg_funding = serializers.DecimalField(max_digits=12, decimal_places=2, source='sub_activity.sdg_funding', read_only=True)
+    partners_funding = serializers.DecimalField(max_digits=12, decimal_places=2, source='sub_activity.partners_funding', read_only=True)
+    other_funding = serializers.DecimalField(max_digits=12, decimal_places=2, source='sub_activity.other_funding', read_only=True)
+
+    class Meta:
+        model = SubActivityBudgetUtilization
+        fields = [
+            'id', 'report', 'sub_activity', 'sub_activity_name', 'main_activity_id', 'main_activity_name',
+            'government_treasury', 'sdg_funding', 'partners_funding', 'other_funding',
+            'government_treasury_utilized', 'sdg_funding_utilized',
+            'partners_funding_utilized', 'other_funding_utilized',
+            'total_utilized', 'created_at', 'updated_at'
+        ]
+
 class ReportSerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     planner_name = serializers.SerializerMethodField()
@@ -710,6 +731,7 @@ class ReportSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     performance_achievements = PerformanceAchievementSerializer(many=True, read_only=True)
     activity_achievements = ActivityAchievementSerializer(many=True, read_only=True)
+    budget_utilizations = SubActivityBudgetUtilizationSerializer(many=True, read_only=True)
 
     class Meta:
         model = Report
@@ -717,7 +739,7 @@ class ReportSerializer(serializers.ModelSerializer):
             'id', 'plan', 'organization', 'organization_name', 'planner', 'planner_name',
             'evaluator', 'evaluator_name', 'report_type', 'report_type_display', 'report_date',
             'narrative_report', 'status', 'status_display', 'evaluator_feedback', 'evaluated_at',
-            'submitted_at', 'performance_achievements', 'activity_achievements',
+            'submitted_at', 'performance_achievements', 'activity_achievements', 'budget_utilizations',
             'created_at', 'updated_at'
         ]
 

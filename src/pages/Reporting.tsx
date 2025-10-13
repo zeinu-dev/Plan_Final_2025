@@ -5,6 +5,7 @@ import { FileText, Upload, AlertCircle, CheckCircle, ArrowLeft, Loader, Save } f
 import { api } from '../lib/api';
 import { REPORT_TYPES, Report, ReportPlanData, PerformanceAchievement, ActivityAchievement } from '../types/report';
 import { HorizontalMEReportTable } from '../components/HorizontalMEReportTable';
+import { BudgetUtilizationForm } from '../components/BudgetUtilizationForm';
 
 const Reporting: React.FC = () => {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ const Reporting: React.FC = () => {
 
   const [performanceAchievements, setPerformanceAchievements] = useState<Record<number, PerformanceAchievement>>({});
   const [activityAchievements, setActivityAchievements] = useState<Record<number, ActivityAchievement>>({});
+  const [budgetUtilizations, setBudgetUtilizations] = useState<Record<number, any>>({});
   const [currentReport, setCurrentReport] = useState<Report | null>(null);
 
   const { data: approvedPlan, isLoading: isLoadingApprovedPlan, error: planError } = useQuery({
@@ -113,13 +115,15 @@ const Reporting: React.FC = () => {
     queryFn: async () => {
       if (!reportId) return null;
 
-      const [perfResponse, actResponse] = await Promise.all([
+      const [perfResponse, actResponse, budgetResponse] = await Promise.all([
         api.get('/performance-achievements/', { params: { report: reportId } }),
-        api.get('/activity-achievements/', { params: { report: reportId } })
+        api.get('/activity-achievements/', { params: { report: reportId } }),
+        api.get('/budget-utilizations/', { params: { report: reportId } })
       ]);
 
       const perfAchievements: Record<number, PerformanceAchievement> = {};
       const actAchievements: Record<number, ActivityAchievement> = {};
+      const budgetUtils: Record<number, any> = {};
 
       (perfResponse.data?.results || perfResponse.data || []).forEach((pa: PerformanceAchievement) => {
         perfAchievements[pa.performance_measure] = pa;
@@ -129,17 +133,24 @@ const Reporting: React.FC = () => {
         actAchievements[aa.main_activity] = aa;
       });
 
+      (budgetResponse.data?.results || budgetResponse.data || []).forEach((bu: any) => {
+        budgetUtils[bu.sub_activity] = bu;
+      });
+
       setPerformanceAchievements(perfAchievements);
       setActivityAchievements(actAchievements);
+      setBudgetUtilizations(budgetUtils);
 
       return {
         perfAchievements,
         actAchievements,
+        budgetUtils,
         performance: perfResponse.data?.results || perfResponse.data || [],
-        activities: actResponse.data?.results || actResponse.data || []
+        activities: actResponse.data?.results || actResponse.data || [],
+        budgets: budgetResponse.data?.results || budgetResponse.data || []
       };
     },
-    enabled: !!reportId && (step === 2 || step === 4)
+    enabled: !!reportId && (step === 2 || step === 3 || step === 4)
   });
 
   const createReportMutation = useMutation({
@@ -232,6 +243,26 @@ const Reporting: React.FC = () => {
     }
   });
 
+  const saveBudgetUtilizationsMutation = useMutation({
+    mutationFn: async (utilizations: any[]) => {
+      if (!reportId) throw new Error('No report ID');
+
+      await api.post('/budget-utilizations/bulk_create_or_update/', {
+        report_id: reportId,
+        budget_utilizations: utilizations
+      });
+    },
+    onSuccess: () => {
+      setStep(4);
+      setSuccess('Budget utilization saved successfully');
+      setTimeout(() => setSuccess(null), 3000);
+    },
+    onError: (err: any) => {
+      setError('Failed to save budget utilization');
+      setTimeout(() => setError(null), 5000);
+    }
+  });
+
   const submitReportMutation = useMutation({
     mutationFn: async () => {
       if (!reportId) throw new Error('No report ID');
@@ -252,7 +283,7 @@ const Reporting: React.FC = () => {
     },
     onSuccess: () => {
       setSuccess('Report submitted successfully!');
-      setStep(4);
+      setStep(5);
     },
     onError: (err: any) => {
       setError('Failed to submit report');
@@ -715,7 +746,25 @@ const Reporting: React.FC = () => {
 
       {step === 3 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold mb-4">Step 3: Upload Narrative Report & Submit</h2>
+          <h2 className="text-lg font-semibold mb-4">Step 3: Budget Utilization</h2>
+          <p className="text-gray-600 mb-4">Enter the budget utilized for each sub-activity by funding source</p>
+
+          <BudgetUtilizationForm
+            planData={planData}
+            reportId={reportId!}
+            onSave={async (utilizations) => {
+              await saveBudgetUtilizationsMutation.mutateAsync(utilizations);
+            }}
+            onBack={() => setStep(2)}
+            isLoading={isLoadingPlan}
+            existingUtilizations={budgetUtilizations}
+          />
+        </div>
+      )}
+
+      {step === 4 && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold mb-4">Step 4: Upload Narrative Report & Submit</h2>
           <p className="text-gray-600 mb-4">Attach your narrative report document (Word or Excel format)</p>
 
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
@@ -745,7 +794,7 @@ const Reporting: React.FC = () => {
 
           <div className="mt-6 flex justify-between">
             <button
-              onClick={() => setStep(2)}
+              onClick={() => setStep(3)}
               className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
             >
               Back
@@ -771,7 +820,7 @@ const Reporting: React.FC = () => {
         </div>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <div className="space-y-6">
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center">
             <CheckCircle className="h-5 w-5 text-green-600 mr-2" />

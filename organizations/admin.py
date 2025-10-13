@@ -6,7 +6,7 @@ from .models import (
     ActivityBudget, ActivityCostingAssumption, InitiativeFeed,
     Location, LandTransport, AirTransport, PerDiem, Accommodation,
     ParticipantCost, SessionCost, PrintingCost, SupervisorCost,ProcurementItem,Plan,SubActivity,
-    Report, PerformanceAchievement, ActivityAchievement
+    Report, PerformanceAchievement, ActivityAchievement, SubActivityBudgetUtilization
 )
 admin.site.register(Plan)
 class OrganizationAdminForm(forms.ModelForm):
@@ -254,3 +254,11 @@ class ActivityAchievementAdmin(admin.ModelAdmin):
     list_filter = ('report__report_type', 'report__organization')
     search_fields = ('main_activity__name',)
     ordering = ('-created_at',)
+
+@admin.register(SubActivityBudgetUtilization)
+class SubActivityBudgetUtilizationAdmin(admin.ModelAdmin):
+    list_display = ('sub_activity', 'report', 'government_treasury_utilized', 'sdg_funding_utilized', 'partners_funding_utilized', 'other_funding_utilized', 'created_at')
+    list_filter = ('report__report_type', 'report__organization')
+    search_fields = ('sub_activity__name',)
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at', 'updated_at')

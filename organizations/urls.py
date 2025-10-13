@@ -12,7 +12,7 @@ from .views import (
     SessionCostViewSet, PrintingCostViewSet, SupervisorCostViewSet,
     ProcurementItemViewSet,login_view, logout_view, check_auth,
     update_profile, password_change, ReportViewSet,
-    PerformanceAchievementViewSet, ActivityAchievementViewSet)
+    PerformanceAchievementViewSet, ActivityAchievementViewSet, SubActivityBudgetUtilizationViewSet)
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect
 from django.http import JsonResponse
 router = DefaultRouter()
@@ -41,6 +41,7 @@ router.register(r'procurement-items', ProcurementItemViewSet)
 router.register(r'reports', ReportViewSet)
 router.register(r'performance-achievements', PerformanceAchievementViewSet)
 router.register(r'activity-achievements', ActivityAchievementViewSet)
+router.register(r'budget-utilizations', SubActivityBudgetUtilizationViewSet)
 
 
 # CSRF token endpoint

@@ -21,7 +21,7 @@ from .models import (
     Plan, PlanReview,Location, LandTransport, AirTransport,
     PerDiem, Accommodation, ParticipantCost, SessionCost,
     PrintingCost, SupervisorCost, ProcurementItem, Report,
-    PerformanceAchievement, ActivityAchievement
+    PerformanceAchievement, ActivityAchievement, SubActivityBudgetUtilization
 )
 from .serializers import (
     OrganizationSerializer, OrganizationUserSerializer, UserSerializer,
@@ -32,7 +32,7 @@ from .serializers import (
     AirTransportSerializer, PerDiemSerializer, AccommodationSerializer,
     ParticipantCostSerializer, SessionCostSerializer, PrintingCostSerializer,
     SupervisorCostSerializer,ProcurementItemSerializer, ReportSerializer,
-    PerformanceAchievementSerializer, ActivityAchievementSerializer
+    PerformanceAchievementSerializer, ActivityAchievementSerializer, SubActivityBudgetUtilizationSerializer
 )
 
 # Set up logger
@@ -1743,7 +1743,7 @@ class ProcurementItemViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class ReportViewSet(viewsets.ModelViewSet):
-    queryset = Report.objects.all().select_related('plan', 'organization', 'planner').prefetch_related('performance_achievements', 'activity_achievements')
+    queryset = Report.objects.all().select_related('plan', 'organization', 'planner').prefetch_related('performance_achievements', 'activity_achievements', 'budget_utilizations')
     serializer_class = ReportSerializer
     permission_classes = [IsAuthenticated]
 
@@ -2249,3 +2249,50 @@ class ActivityAchievementViewSet(viewsets.ModelViewSet):
         if report_id:
             queryset = queryset.filter(report_id=report_id)
         return queryset
+
+
+class SubActivityBudgetUtilizationViewSet(viewsets.ModelViewSet):
+    queryset = SubActivityBudgetUtilization.objects.all().select_related('report', 'sub_activity')
+    serializer_class = SubActivityBudgetUtilizationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        report_id = self.request.query_params.get('report', None)
+        if report_id:
+            queryset = queryset.filter(report_id=report_id)
+        return queryset
+
+    @action(detail=False, methods=['post'])
+    def bulk_create_or_update(self, request):
+        try:
+            budget_utilizations = request.data.get('budget_utilizations', [])
+            report_id = request.data.get('report_id')
+
+            if not report_id:
+                return Response({'error': 'Report ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            created_or_updated = []
+
+            with transaction.atomic():
+                for util_data in budget_utilizations:
+                    sub_activity_id = util_data.get('sub_activity')
+
+                    obj, created = SubActivityBudgetUtilization.objects.update_or_create(
+                        report_id=report_id,
+                        sub_activity_id=sub_activity_id,
+                        defaults={
+                            'government_treasury_utilized': util_data.get('government_treasury_utilized', 0),
+                            'sdg_funding_utilized': util_data.get('sdg_funding_utilized', 0),
+                            'partners_funding_utilized': util_data.get('partners_funding_utilized', 0),
+                            'other_funding_utilized': util_data.get('other_funding_utilized', 0),
+                        }
+                    )
+                    created_or_updated.append(obj)
+
+            serializer = self.get_serializer(created_or_updated, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.exception("Error in bulk create/update budget utilization")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
