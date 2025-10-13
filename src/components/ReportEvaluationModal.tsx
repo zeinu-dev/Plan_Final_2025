@@ -20,6 +20,48 @@ export const ReportEvaluationModal: React.FC<ReportEvaluationModalProps> = ({ re
     queryKey: ['report-plan-data', report.id],
     queryFn: async () => {
       const response = await api.get(`/reports/${report.id}/plan_data/`);
+      console.log('ReportEvaluationModal - Full report data:', response.data);
+      console.log('ReportEvaluationModal - ME data:', response.data.me_data);
+
+      if (response.data.me_data) {
+        response.data.me_data = response.data.me_data.map((obj: any) => ({
+          ...obj,
+          initiatives: obj.initiatives?.map((init: any) => ({
+            ...init,
+            mainActivities: init.mainActivities?.map((act: any) => {
+              console.log(`Activity: ${act.name}`);
+              const subActivities = (act.sub_activities || []).map((sub: any) => {
+                console.log(`  Sub-activity: ${sub.name}`, {
+                  government_treasury: sub.government_treasury,
+                  sdg_funding: sub.sdg_funding,
+                  partners_funding: sub.partners_funding,
+                  other_funding: sub.other_funding,
+                  government_treasury_utilized: sub.government_treasury_utilized,
+                  sdg_funding_utilized: sub.sdg_funding_utilized,
+                  partners_funding_utilized: sub.partners_funding_utilized,
+                  other_funding_utilized: sub.other_funding_utilized
+                });
+                return {
+                  ...sub,
+                  government_treasury: Number(sub.government_treasury) || 0,
+                  sdg_funding: Number(sub.sdg_funding) || 0,
+                  partners_funding: Number(sub.partners_funding) || 0,
+                  other_funding: Number(sub.other_funding) || 0,
+                  government_treasury_utilized: Number(sub.government_treasury_utilized) || 0,
+                  sdg_funding_utilized: Number(sub.sdg_funding_utilized) || 0,
+                  partners_funding_utilized: Number(sub.partners_funding_utilized) || 0,
+                  other_funding_utilized: Number(sub.other_funding_utilized) || 0,
+                };
+              });
+              return {
+                ...act,
+                subActivities
+              };
+            })
+          }))
+        }));
+      }
+
       return response.data;
     }
   });

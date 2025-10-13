@@ -441,14 +441,14 @@ const Reporting: React.FC = () => {
           return {
             id: subActivity.id,
             name: subActivity.name,
-            government_treasury: subActivity.government_treasury || 0,
-            sdg_funding: subActivity.sdg_funding || 0,
-            partners_funding: subActivity.partners_funding || 0,
-            other_funding: subActivity.other_funding || 0,
-            government_treasury_utilized: util?.government_treasury_utilized || 0,
-            sdg_funding_utilized: util?.sdg_funding_utilized || 0,
-            partners_funding_utilized: util?.partners_funding_utilized || 0,
-            other_funding_utilized: util?.other_funding_utilized || 0,
+            government_treasury: Number(subActivity.government_treasury) || 0,
+            sdg_funding: Number(subActivity.sdg_funding) || 0,
+            partners_funding: Number(subActivity.partners_funding) || 0,
+            other_funding: Number(subActivity.other_funding) || 0,
+            government_treasury_utilized: Number(util?.government_treasury_utilized) || 0,
+            sdg_funding_utilized: Number(util?.sdg_funding_utilized) || 0,
+            partners_funding_utilized: Number(util?.partners_funding_utilized) || 0,
+            other_funding_utilized: Number(util?.other_funding_utilized) || 0,
           };
         }) || [];
 
