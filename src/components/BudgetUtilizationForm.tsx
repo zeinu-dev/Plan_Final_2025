@@ -209,18 +209,18 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
             {allSubActivities.map((subActivity) => {
               const util = utilizations[subActivity.id];
 
-              const govTreasuryUtilized = util?.government_treasury_utilized || 0;
-              const sdgUtilized = util?.sdg_funding_utilized || 0;
-              const partnersUtilized = util?.partners_funding_utilized || 0;
-              const otherUtilized = util?.other_funding_utilized || 0;
+              const govTreasuryUtilized = Number(util?.government_treasury_utilized) || 0;
+              const sdgUtilized = Number(util?.sdg_funding_utilized) || 0;
+              const partnersUtilized = Number(util?.partners_funding_utilized) || 0;
+              const otherUtilized = Number(util?.other_funding_utilized) || 0;
 
-              const govTreasuryRemaining = subActivity.government_treasury - govTreasuryUtilized;
-              const sdgRemaining = subActivity.sdg_funding - sdgUtilized;
-              const partnersRemaining = subActivity.partners_funding - partnersUtilized;
-              const otherRemaining = subActivity.other_funding - otherUtilized;
+              const govTreasuryRemaining = Number(subActivity.government_treasury) - govTreasuryUtilized;
+              const sdgRemaining = Number(subActivity.sdg_funding) - sdgUtilized;
+              const partnersRemaining = Number(subActivity.partners_funding) - partnersUtilized;
+              const otherRemaining = Number(subActivity.other_funding) - otherUtilized;
 
-              const totalBudget = subActivity.government_treasury + subActivity.sdg_funding +
-                                  subActivity.partners_funding + subActivity.other_funding;
+              const totalBudget = Number(subActivity.government_treasury) + Number(subActivity.sdg_funding) +
+                                  Number(subActivity.partners_funding) + Number(subActivity.other_funding);
               const totalUtilized = govTreasuryUtilized + sdgUtilized + partnersUtilized + otherUtilized;
               const totalRemaining = totalBudget - totalUtilized;
 
@@ -231,14 +231,14 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
                   </td>
 
                   <td className="px-2 py-3 text-sm text-center border-r bg-blue-50">
-                    {subActivity.government_treasury.toFixed(2)}
+                    {Number(subActivity.government_treasury).toFixed(2)}
                   </td>
                   <td className="px-2 py-3 border-r bg-blue-50">
                     <input
                       type="number"
                       step="0.01"
                       min="0"
-                      max={subActivity.government_treasury}
+                      max={Number(subActivity.government_treasury)}
                       value={util?.government_treasury_utilized || ''}
                       onChange={(e) => handleUtilizationChange(
                         subActivity.id,
@@ -256,14 +256,14 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
                   </td>
 
                   <td className="px-2 py-3 text-sm text-center border-r bg-green-50">
-                    {subActivity.sdg_funding.toFixed(2)}
+                    {Number(subActivity.sdg_funding).toFixed(2)}
                   </td>
                   <td className="px-2 py-3 border-r bg-green-50">
                     <input
                       type="number"
                       step="0.01"
                       min="0"
-                      max={subActivity.sdg_funding}
+                      max={Number(subActivity.sdg_funding)}
                       value={util?.sdg_funding_utilized || ''}
                       onChange={(e) => handleUtilizationChange(
                         subActivity.id,
@@ -281,14 +281,14 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
                   </td>
 
                   <td className="px-2 py-3 text-sm text-center border-r bg-yellow-50">
-                    {subActivity.partners_funding.toFixed(2)}
+                    {Number(subActivity.partners_funding).toFixed(2)}
                   </td>
                   <td className="px-2 py-3 border-r bg-yellow-50">
                     <input
                       type="number"
                       step="0.01"
                       min="0"
-                      max={subActivity.partners_funding}
+                      max={Number(subActivity.partners_funding)}
                       value={util?.partners_funding_utilized || ''}
                       onChange={(e) => handleUtilizationChange(
                         subActivity.id,
@@ -306,14 +306,14 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
                   </td>
 
                   <td className="px-2 py-3 text-sm text-center border-r bg-purple-50">
-                    {subActivity.other_funding.toFixed(2)}
+                    {Number(subActivity.other_funding).toFixed(2)}
                   </td>
                   <td className="px-2 py-3 border-r bg-purple-50">
                     <input
                       type="number"
                       step="0.01"
                       min="0"
-                      max={subActivity.other_funding}
+                      max={Number(subActivity.other_funding)}
                       value={util?.other_funding_utilized || ''}
                       onChange={(e) => handleUtilizationChange(
                         subActivity.id,
@@ -362,14 +362,14 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
 
                 allSubActivities.forEach((subActivity) => {
                   const util = utilizations[subActivity.id];
-                  grandTotals.govTreasuryBudget += subActivity.government_treasury;
-                  grandTotals.govTreasuryUtilized += util?.government_treasury_utilized || 0;
-                  grandTotals.sdgBudget += subActivity.sdg_funding;
-                  grandTotals.sdgUtilized += util?.sdg_funding_utilized || 0;
-                  grandTotals.partnersBudget += subActivity.partners_funding;
-                  grandTotals.partnersUtilized += util?.partners_funding_utilized || 0;
-                  grandTotals.otherBudget += subActivity.other_funding;
-                  grandTotals.otherUtilized += util?.other_funding_utilized || 0;
+                  grandTotals.govTreasuryBudget += Number(subActivity.government_treasury) || 0;
+                  grandTotals.govTreasuryUtilized += Number(util?.government_treasury_utilized) || 0;
+                  grandTotals.sdgBudget += Number(subActivity.sdg_funding) || 0;
+                  grandTotals.sdgUtilized += Number(util?.sdg_funding_utilized) || 0;
+                  grandTotals.partnersBudget += Number(subActivity.partners_funding) || 0;
+                  grandTotals.partnersUtilized += Number(util?.partners_funding_utilized) || 0;
+                  grandTotals.otherBudget += Number(subActivity.other_funding) || 0;
+                  grandTotals.otherUtilized += Number(util?.other_funding_utilized) || 0;
                 });
 
                 const totalBudget = grandTotals.govTreasuryBudget + grandTotals.sdgBudget +
