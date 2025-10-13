@@ -370,6 +370,9 @@ const Reporting: React.FC = () => {
       return [];
     }
 
+    console.log('getMEReportData: budgetUtilizations state:', budgetUtilizations);
+    console.log('getMEReportData: plan_data:', planData.plan_data);
+
     const objectivesMap = new Map();
 
     planData.plan_data.forEach((initiative: ReportPlanData) => {
@@ -403,8 +406,25 @@ const Reporting: React.FC = () => {
           (a: any) => a.main_activity === activity.id
         );
 
+        console.log(`Activity ${activity.id} (${activity.name}):`, {
+          has_sub_activities: !!activity.sub_activities,
+          sub_activities_count: activity.sub_activities?.length || 0,
+          sub_activities: activity.sub_activities
+        });
+
         const subActivities = activity.sub_activities?.map((subActivity: any) => {
           const util = budgetUtilizations[subActivity.id];
+          console.log(`Sub-activity ${subActivity.id}:`, {
+            budget: {
+              gov: subActivity.government_treasury,
+              sdg: subActivity.sdg_funding,
+              partners: subActivity.partners_funding,
+              other: subActivity.other_funding
+            },
+            utilization: util,
+            util_found: !!util
+          });
+
           return {
             id: subActivity.id,
             name: subActivity.name,
@@ -418,6 +438,8 @@ const Reporting: React.FC = () => {
             other_funding_utilized: util?.other_funding_utilized || 0,
           };
         }) || [];
+
+        console.log(`Final subActivities for ${activity.name}:`, subActivities);
 
         return {
           id: activity.id,
