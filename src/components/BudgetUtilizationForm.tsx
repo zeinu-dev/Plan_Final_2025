@@ -83,30 +83,39 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
   console.log('Budget Utilization - plan_data:', planData?.plan_data);
 
   planData?.plan_data.forEach((initiative, initIdx) => {
-    console.log(`Initiative ${initIdx}:`, initiative);
-    console.log(`Main activities:`, initiative.main_activities);
+    console.log(`Initiative ${initIdx}:`, JSON.stringify(initiative, null, 2));
+    console.log(`Main activities count:`, initiative.main_activities?.length);
 
-    initiative.main_activities.forEach((activity, actIdx) => {
-      console.log(`Activity ${actIdx}:`, activity);
-      console.log(`Activity keys:`, Object.keys(activity));
-      console.log(`Sub-activities:`, activity.sub_activities);
+    if (initiative.main_activities && Array.isArray(initiative.main_activities)) {
+      initiative.main_activities.forEach((activity, actIdx) => {
+        console.log(`Activity ${actIdx} (${activity.name}):`, JSON.stringify(activity, null, 2));
+        console.log(`Activity keys:`, Object.keys(activity));
+        console.log(`Has sub_activities key:`, 'sub_activities' in activity);
+        console.log(`sub_activities value:`, activity.sub_activities);
+        console.log(`sub_activities type:`, typeof activity.sub_activities);
+        console.log(`sub_activities is array:`, Array.isArray(activity.sub_activities));
+        console.log(`sub_activities length:`, activity.sub_activities?.length);
 
-      const subActivities = activity.sub_activities || activity.subActivities || [];
+        const subActivities = activity.sub_activities || activity.subActivities || [];
 
-      if (subActivities && subActivities.length > 0) {
-        subActivities.forEach((subActivity: any) => {
-          console.log('Sub-activity:', subActivity);
-          allSubActivities.push({
-            id: subActivity.id,
-            name: `${activity.name} - ${subActivity.name}`,
-            government_treasury: subActivity.government_treasury || 0,
-            sdg_funding: subActivity.sdg_funding || 0,
-            partners_funding: subActivity.partners_funding || 0,
-            other_funding: subActivity.other_funding || 0,
+        if (subActivities && Array.isArray(subActivities) && subActivities.length > 0) {
+          console.log(`Found ${subActivities.length} sub-activities for ${activity.name}`);
+          subActivities.forEach((subActivity: any) => {
+            console.log('Processing sub-activity:', subActivity);
+            allSubActivities.push({
+              id: subActivity.id,
+              name: `${activity.name} - ${subActivity.name}`,
+              government_treasury: subActivity.government_treasury || 0,
+              sdg_funding: subActivity.sdg_funding || 0,
+              partners_funding: subActivity.partners_funding || 0,
+              other_funding: subActivity.other_funding || 0,
+            });
           });
-        });
-      }
-    });
+        } else {
+          console.log(`No sub-activities found for activity ${activity.name}`);
+        }
+      });
+    }
   });
 
   console.log('All sub-activities found:', allSubActivities.length);
