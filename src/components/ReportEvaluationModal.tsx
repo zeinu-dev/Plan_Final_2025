@@ -70,19 +70,21 @@ export const ReportEvaluationModal: React.FC<ReportEvaluationModalProps> = ({ re
     if (!report.narrative_report) return;
 
     try {
-      const response = await fetch(report.narrative_report);
-      if (!response.ok) {
-        throw new Error('Failed to fetch file');
-      }
+      const response = await api.get(`/reports/${report.id}/download_narrative/`, {
+        responseType: 'blob'
+      });
 
-      const blob = await response.blob();
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      });
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.style.display = 'none';
       a.href = url;
 
       const filename = report.narrative_report.split('/').pop() ||
-                      `Narrative_Report_${report.organization_name}_${report.report_type}`;
+                      `Narrative_Report_${report.organization_name}_${report.report_type}.docx`;
       a.download = filename;
 
       document.body.appendChild(a);
@@ -96,6 +98,11 @@ export const ReportEvaluationModal: React.FC<ReportEvaluationModalProps> = ({ re
       console.error('Error downloading narrative report:', error);
       alert('Failed to download narrative report. Please try again.');
     }
+  };
+
+  const handleViewNarrative = () => {
+    if (!report.narrative_report) return;
+    window.open(report.narrative_report, '_blank');
   };
 
   const evaluateMutation = useMutation({
@@ -183,13 +190,22 @@ export const ReportEvaluationModal: React.FC<ReportEvaluationModalProps> = ({ re
             </dl>
             <div className="mt-4 flex gap-3">
               {report.narrative_report && (
-                <button
-                  onClick={handleDownloadNarrative}
-                  className="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium"
-                >
-                  <FileText className="h-4 w-4 mr-1" />
-                  Download Narrative Report
-                </button>
+                <>
+                  <button
+                    onClick={handleViewNarrative}
+                    className="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    <Eye className="h-4 w-4 mr-1" />
+                    View Narrative Report
+                  </button>
+                  <button
+                    onClick={handleDownloadNarrative}
+                    className="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    <FileText className="h-4 w-4 mr-1" />
+                    Download Narrative Report
+                  </button>
+                </>
               )}
               <button
                 type="button"

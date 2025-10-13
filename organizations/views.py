@@ -1880,6 +1880,39 @@ class ReportViewSet(viewsets.ModelViewSet):
             logger.exception("Error approving report")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=True, methods=['get'])
+    def download_narrative(self, request, pk=None):
+        """Download narrative report file"""
+        from django.http import FileResponse, Http404
+        import os
+
+        try:
+            report = self.get_object()
+
+            if not report.narrative_report:
+                raise Http404("Narrative report not found")
+
+            file_path = report.narrative_report.path
+
+            if not os.path.exists(file_path):
+                raise Http404("File not found")
+
+            response = FileResponse(
+                open(file_path, 'rb'),
+                content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            )
+
+            filename = os.path.basename(file_path)
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+            return response
+
+        except Http404:
+            raise
+        except Exception as e:
+            logger.exception("Error downloading narrative report")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
         try:
