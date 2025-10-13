@@ -1997,12 +1997,25 @@ class ReportViewSet(viewsets.ModelViewSet):
                         logger.info(f"Calculated target for activity {activity.id}: {target}")
 
                         if target is not None and target > 0:
+                            sub_activities_data = []
+                            for sub_activity in activity.sub_activities.all():
+                                sub_activities_data.append({
+                                    'id': sub_activity.id,
+                                    'name': sub_activity.name,
+                                    'activity_type': sub_activity.activity_type,
+                                    'government_treasury': float(sub_activity.government_treasury),
+                                    'sdg_funding': float(sub_activity.sdg_funding),
+                                    'partners_funding': float(sub_activity.partners_funding),
+                                    'other_funding': float(sub_activity.other_funding),
+                                })
+
                             initiative_data['main_activities'].append({
                                 'id': activity.id,
                                 'name': activity.name,
                                 'weight': float(activity.weight or 0),
                                 'target': float(target),
-                                'target_type': activity.target_type
+                                'target_type': activity.target_type,
+                                'sub_activities': sub_activities_data
                             })
                         else:
                             logger.warning(f"Skipping activity {activity.id} - no valid target for {report_type}")
@@ -2067,13 +2080,52 @@ class ReportViewSet(viewsets.ModelViewSet):
                     target = self._get_target_for_period(activity, report.report_type)
                     if target and target > 0:
                         achievement_record = report.activity_achievements.filter(main_activity=activity).first()
+
+                        sub_activities_data = []
+                        for sub_activity in activity.sub_activities.all():
+                            budget_util = report.budget_utilizations.filter(sub_activity=sub_activity).first()
+
+                            total_budget = (
+                                float(sub_activity.government_treasury) +
+                                float(sub_activity.sdg_funding) +
+                                float(sub_activity.partners_funding) +
+                                float(sub_activity.other_funding)
+                            )
+
+                            total_utilized = 0
+                            if budget_util:
+                                total_utilized = (
+                                    float(budget_util.government_treasury_utilized) +
+                                    float(budget_util.sdg_funding_utilized) +
+                                    float(budget_util.partners_funding_utilized) +
+                                    float(budget_util.other_funding_utilized)
+                                )
+
+                            sub_activities_data.append({
+                                'id': sub_activity.id,
+                                'name': sub_activity.name,
+                                'activity_type': sub_activity.activity_type,
+                                'government_treasury': float(sub_activity.government_treasury),
+                                'sdg_funding': float(sub_activity.sdg_funding),
+                                'partners_funding': float(sub_activity.partners_funding),
+                                'other_funding': float(sub_activity.other_funding),
+                                'government_treasury_utilized': float(budget_util.government_treasury_utilized) if budget_util else 0,
+                                'sdg_funding_utilized': float(budget_util.sdg_funding_utilized) if budget_util else 0,
+                                'partners_funding_utilized': float(budget_util.partners_funding_utilized) if budget_util else 0,
+                                'other_funding_utilized': float(budget_util.other_funding_utilized) if budget_util else 0,
+                                'total_budget': total_budget,
+                                'total_utilized': total_utilized,
+                                'remaining_budget': total_budget - total_utilized
+                            })
+
                         activities_data.append({
                             'id': activity.id,
                             'name': activity.name,
                             'weight': float(activity.weight or 0),
                             'target': float(target),
                             'achievement': float(achievement_record.achievement) if achievement_record else 0,
-                            'justification': achievement_record.justification if achievement_record else ''
+                            'justification': achievement_record.justification if achievement_record else '',
+                            'sub_activities': sub_activities_data
                         })
 
                 if measures_data or activities_data:

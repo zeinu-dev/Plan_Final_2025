@@ -79,10 +79,23 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
 
   const allSubActivities: SubActivityBudget[] = [];
 
-  planData?.plan_data.forEach((initiative) => {
-    initiative.main_activities.forEach((activity) => {
-      if (activity.sub_activities && activity.sub_activities.length > 0) {
-        activity.sub_activities.forEach((subActivity: any) => {
+  console.log('Budget Utilization - Plan Data:', planData);
+  console.log('Budget Utilization - plan_data:', planData?.plan_data);
+
+  planData?.plan_data.forEach((initiative, initIdx) => {
+    console.log(`Initiative ${initIdx}:`, initiative);
+    console.log(`Main activities:`, initiative.main_activities);
+
+    initiative.main_activities.forEach((activity, actIdx) => {
+      console.log(`Activity ${actIdx}:`, activity);
+      console.log(`Activity keys:`, Object.keys(activity));
+      console.log(`Sub-activities:`, activity.sub_activities);
+
+      const subActivities = activity.sub_activities || activity.subActivities || [];
+
+      if (subActivities && subActivities.length > 0) {
+        subActivities.forEach((subActivity: any) => {
+          console.log('Sub-activity:', subActivity);
           allSubActivities.push({
             id: subActivity.id,
             name: `${activity.name} - ${subActivity.name}`,
@@ -95,6 +108,8 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
       }
     });
   });
+
+  console.log('All sub-activities found:', allSubActivities.length);
 
   if (isLoading) {
     return (
