@@ -1781,46 +1781,12 @@ class ReportViewSet(viewsets.ModelViewSet):
             logger.info(f"Request data keys: {request.data.keys()}")
             logger.info(f"Request FILES keys: {request.FILES.keys()}")
 
-            # Check if we have a file upload
-            has_file = 'narrative_report' in request.FILES
+            serializer = self.get_serializer(instance, data=request.data, partial=partial)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
 
-            try:
-                serializer = self.get_serializer(instance, data=request.data, partial=partial)
-                serializer.is_valid(raise_exception=True)
-                self.perform_update(serializer)
-                logger.info(f"Report {instance.id} updated successfully")
-                return Response(serializer.data)
-
-            except (PermissionError, OSError) as file_error:
-                # If file upload fails due to permissions, continue without file
-                error_msg = str(file_error)
-                logger.error(f"File system error: {error_msg}")
-
-                if has_file and ('Permission denied' in error_msg or 'Errno 13' in error_msg):
-                    # Skip file upload and update without it
-                    logger.warning(f"Skipping file upload for report {instance.id} due to permission error")
-
-                    # Create a mutable copy of request data without the file
-                    from rest_framework.request import Request
-                    from django.http import QueryDict
-
-                    mutable_data = QueryDict('', mutable=True)
-                    for key, value in request.data.items():
-                        if key != 'narrative_report':
-                            mutable_data[key] = value
-
-                    # Update without the file
-                    serializer = self.get_serializer(instance, data=mutable_data, partial=partial)
-                    serializer.is_valid(raise_exception=True)
-                    self.perform_update(serializer)
-
-                    logger.info(f"Report {instance.id} updated successfully (without file)")
-                    response_data = serializer.data
-                    response_data['warning'] = 'Report updated but file upload skipped. Server directory permissions need to be configured.'
-                    return Response(response_data, status=status.HTTP_200_OK)
-                else:
-                    # Re-raise if it's not a permission issue
-                    raise
+            logger.info(f"Report {instance.id} updated successfully")
+            return Response(serializer.data)
 
         except Exception as e:
             logger.exception(f"Error updating report {kwargs.get('pk')}")
