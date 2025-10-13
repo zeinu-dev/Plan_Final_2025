@@ -488,10 +488,10 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
                           const { achievementPercent, achievementByWeight } = calculateActivityAchievement(activity);
 
                           const totalBudget = (activity.subActivities || []).reduce((sum, sub) =>
-                            sum + sub.government_treasury + sub.sdg_funding + sub.partners_funding + sub.other_funding, 0);
+                            sum + Number(sub.government_treasury) + Number(sub.sdg_funding) + Number(sub.partners_funding) + Number(sub.other_funding), 0);
                           const totalUtilized = (activity.subActivities || []).reduce((sum, sub) =>
-                            sum + sub.government_treasury_utilized + sub.sdg_funding_utilized +
-                            sub.partners_funding_utilized + sub.other_funding_utilized, 0);
+                            sum + Number(sub.government_treasury_utilized || 0) + Number(sub.sdg_funding_utilized || 0) +
+                            Number(sub.partners_funding_utilized || 0) + Number(sub.other_funding_utilized || 0), 0);
                           const totalRemaining = totalBudget - totalUtilized;
 
                           return (
@@ -537,10 +537,10 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
                               </tr>
 
                               {(activity.subActivities || []).map((subActivity) => {
-                                const subTotalBudget = subActivity.government_treasury + subActivity.sdg_funding +
-                                                       subActivity.partners_funding + subActivity.other_funding;
-                                const subTotalUtilized = subActivity.government_treasury_utilized + subActivity.sdg_funding_utilized +
-                                                         subActivity.partners_funding_utilized + subActivity.other_funding_utilized;
+                                const subTotalBudget = Number(subActivity.government_treasury) + Number(subActivity.sdg_funding) +
+                                                       Number(subActivity.partners_funding) + Number(subActivity.other_funding);
+                                const subTotalUtilized = Number(subActivity.government_treasury_utilized || 0) + Number(subActivity.sdg_funding_utilized || 0) +
+                                                         Number(subActivity.partners_funding_utilized || 0) + Number(subActivity.other_funding_utilized || 0);
                                 const subTotalRemaining = subTotalBudget - subTotalUtilized;
 
                                 return (
