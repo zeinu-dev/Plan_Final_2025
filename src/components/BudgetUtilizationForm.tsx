@@ -164,131 +164,274 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
         <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r">
+              <th rowSpan={2} className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r align-middle">
                 Activity / Sub-Activity
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r">
-                <div>Government Treasury</div>
-                <div className="text-xs font-normal text-gray-500 mt-1">Budget Utilized</div>
+              <th colSpan={3} className="px-4 py-2 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-r bg-blue-100">
+                Government Treasury
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r">
-                <div>SDG Funding</div>
-                <div className="text-xs font-normal text-gray-500 mt-1">Budget Utilized</div>
+              <th colSpan={3} className="px-4 py-2 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-r bg-green-100">
+                SDG Funding
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider border-r">
-                <div>Partner Funding</div>
-                <div className="text-xs font-normal text-gray-500 mt-1">Budget Utilized</div>
+              <th colSpan={3} className="px-4 py-2 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-r bg-yellow-100">
+                Partner Funding
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                <div>Other Funding</div>
-                <div className="text-xs font-normal text-gray-500 mt-1">Budget Utilized</div>
+              <th colSpan={3} className="px-4 py-2 text-center text-xs font-medium text-gray-700 uppercase tracking-wider border-r bg-purple-100">
+                Other Funding
               </th>
+              <th colSpan={3} className="px-4 py-2 text-center text-xs font-medium text-gray-700 uppercase tracking-wider bg-gray-200">
+                Total
+              </th>
+            </tr>
+            <tr>
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 border-r bg-blue-50">Total Budget</th>
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 border-r bg-blue-50">Utilized</th>
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 border-r bg-blue-50">Remaining</th>
+
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 border-r bg-green-50">Total Budget</th>
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 border-r bg-green-50">Utilized</th>
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 border-r bg-green-50">Remaining</th>
+
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 border-r bg-yellow-50">Total Budget</th>
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 border-r bg-yellow-50">Utilized</th>
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 border-r bg-yellow-50">Remaining</th>
+
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 border-r bg-purple-50">Total Budget</th>
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 border-r bg-purple-50">Utilized</th>
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 border-r bg-purple-50">Remaining</th>
+
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 border-r bg-gray-100">Total Budget</th>
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 border-r bg-gray-100">Utilized</th>
+              <th className="px-2 py-2 text-center text-xs font-medium text-gray-600 bg-gray-100">Remaining</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {allSubActivities.map((subActivity) => {
               const util = utilizations[subActivity.id];
 
+              const govTreasuryUtilized = util?.government_treasury_utilized || 0;
+              const sdgUtilized = util?.sdg_funding_utilized || 0;
+              const partnersUtilized = util?.partners_funding_utilized || 0;
+              const otherUtilized = util?.other_funding_utilized || 0;
+
+              const govTreasuryRemaining = subActivity.government_treasury - govTreasuryUtilized;
+              const sdgRemaining = subActivity.sdg_funding - sdgUtilized;
+              const partnersRemaining = subActivity.partners_funding - partnersUtilized;
+              const otherRemaining = subActivity.other_funding - otherUtilized;
+
+              const totalBudget = subActivity.government_treasury + subActivity.sdg_funding +
+                                  subActivity.partners_funding + subActivity.other_funding;
+              const totalUtilized = govTreasuryUtilized + sdgUtilized + partnersUtilized + otherUtilized;
+              const totalRemaining = totalBudget - totalUtilized;
+
               return (
                 <tr key={subActivity.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm border-r">
                     <div className="font-medium text-gray-900">{subActivity.name}</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Total Budget: {(
-                        subActivity.government_treasury +
-                        subActivity.sdg_funding +
-                        subActivity.partners_funding +
-                        subActivity.other_funding
-                      ).toFixed(2)} ETB
-                    </div>
                   </td>
-                  <td className="px-4 py-3 border-r">
-                    <div className="space-y-1">
-                      <div className="text-xs text-gray-500">
-                        Total: {subActivity.government_treasury.toFixed(2)} ETB
-                      </div>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max={subActivity.government_treasury}
-                        value={util?.government_treasury_utilized || ''}
-                        onChange={(e) => handleUtilizationChange(
-                          subActivity.id,
-                          'government_treasury_utilized',
-                          e.target.value
-                        )}
-                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="0.00"
-                      />
-                    </div>
+
+                  <td className="px-2 py-3 text-sm text-center border-r bg-blue-50">
+                    {subActivity.government_treasury.toFixed(2)}
                   </td>
-                  <td className="px-4 py-3 border-r">
-                    <div className="space-y-1">
-                      <div className="text-xs text-gray-500">
-                        Total: {subActivity.sdg_funding.toFixed(2)} ETB
-                      </div>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max={subActivity.sdg_funding}
-                        value={util?.sdg_funding_utilized || ''}
-                        onChange={(e) => handleUtilizationChange(
-                          subActivity.id,
-                          'sdg_funding_utilized',
-                          e.target.value
-                        )}
-                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="0.00"
-                      />
-                    </div>
+                  <td className="px-2 py-3 border-r bg-blue-50">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max={subActivity.government_treasury}
+                      value={util?.government_treasury_utilized || ''}
+                      onChange={(e) => handleUtilizationChange(
+                        subActivity.id,
+                        'government_treasury_utilized',
+                        e.target.value
+                      )}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="0.00"
+                    />
                   </td>
-                  <td className="px-4 py-3 border-r">
-                    <div className="space-y-1">
-                      <div className="text-xs text-gray-500">
-                        Total: {subActivity.partners_funding.toFixed(2)} ETB
-                      </div>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max={subActivity.partners_funding}
-                        value={util?.partners_funding_utilized || ''}
-                        onChange={(e) => handleUtilizationChange(
-                          subActivity.id,
-                          'partners_funding_utilized',
-                          e.target.value
-                        )}
-                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="0.00"
-                      />
-                    </div>
+                  <td className="px-2 py-3 text-sm text-center border-r bg-blue-50">
+                    <span className={govTreasuryRemaining < 0 ? 'text-red-600 font-semibold' : ''}>
+                      {govTreasuryRemaining.toFixed(2)}
+                    </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="space-y-1">
-                      <div className="text-xs text-gray-500">
-                        Total: {subActivity.other_funding.toFixed(2)} ETB
-                      </div>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max={subActivity.other_funding}
-                        value={util?.other_funding_utilized || ''}
-                        onChange={(e) => handleUtilizationChange(
-                          subActivity.id,
-                          'other_funding_utilized',
-                          e.target.value
-                        )}
-                        className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="0.00"
-                      />
-                    </div>
+
+                  <td className="px-2 py-3 text-sm text-center border-r bg-green-50">
+                    {subActivity.sdg_funding.toFixed(2)}
+                  </td>
+                  <td className="px-2 py-3 border-r bg-green-50">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max={subActivity.sdg_funding}
+                      value={util?.sdg_funding_utilized || ''}
+                      onChange={(e) => handleUtilizationChange(
+                        subActivity.id,
+                        'sdg_funding_utilized',
+                        e.target.value
+                      )}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="0.00"
+                    />
+                  </td>
+                  <td className="px-2 py-3 text-sm text-center border-r bg-green-50">
+                    <span className={sdgRemaining < 0 ? 'text-red-600 font-semibold' : ''}>
+                      {sdgRemaining.toFixed(2)}
+                    </span>
+                  </td>
+
+                  <td className="px-2 py-3 text-sm text-center border-r bg-yellow-50">
+                    {subActivity.partners_funding.toFixed(2)}
+                  </td>
+                  <td className="px-2 py-3 border-r bg-yellow-50">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max={subActivity.partners_funding}
+                      value={util?.partners_funding_utilized || ''}
+                      onChange={(e) => handleUtilizationChange(
+                        subActivity.id,
+                        'partners_funding_utilized',
+                        e.target.value
+                      )}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="0.00"
+                    />
+                  </td>
+                  <td className="px-2 py-3 text-sm text-center border-r bg-yellow-50">
+                    <span className={partnersRemaining < 0 ? 'text-red-600 font-semibold' : ''}>
+                      {partnersRemaining.toFixed(2)}
+                    </span>
+                  </td>
+
+                  <td className="px-2 py-3 text-sm text-center border-r bg-purple-50">
+                    {subActivity.other_funding.toFixed(2)}
+                  </td>
+                  <td className="px-2 py-3 border-r bg-purple-50">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max={subActivity.other_funding}
+                      value={util?.other_funding_utilized || ''}
+                      onChange={(e) => handleUtilizationChange(
+                        subActivity.id,
+                        'other_funding_utilized',
+                        e.target.value
+                      )}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="0.00"
+                    />
+                  </td>
+                  <td className="px-2 py-3 text-sm text-center border-r bg-purple-50">
+                    <span className={otherRemaining < 0 ? 'text-red-600 font-semibold' : ''}>
+                      {otherRemaining.toFixed(2)}
+                    </span>
+                  </td>
+
+                  <td className="px-2 py-3 text-sm text-center border-r bg-gray-100 font-semibold">
+                    {totalBudget.toFixed(2)}
+                  </td>
+                  <td className="px-2 py-3 text-sm text-center border-r bg-gray-100 font-semibold">
+                    {totalUtilized.toFixed(2)}
+                  </td>
+                  <td className="px-2 py-3 text-sm text-center bg-gray-100 font-semibold">
+                    <span className={totalRemaining < 0 ? 'text-red-600' : ''}>
+                      {totalRemaining.toFixed(2)}
+                    </span>
                   </td>
                 </tr>
               );
             })}
+            <tr className="bg-gray-200 font-bold border-t-2 border-gray-400">
+              <td className="px-4 py-3 text-sm border-r">
+                <div className="font-bold text-gray-900">GRAND TOTAL</div>
+              </td>
+              {(() => {
+                const grandTotals = {
+                  govTreasuryBudget: 0,
+                  govTreasuryUtilized: 0,
+                  sdgBudget: 0,
+                  sdgUtilized: 0,
+                  partnersBudget: 0,
+                  partnersUtilized: 0,
+                  otherBudget: 0,
+                  otherUtilized: 0,
+                };
+
+                allSubActivities.forEach((subActivity) => {
+                  const util = utilizations[subActivity.id];
+                  grandTotals.govTreasuryBudget += subActivity.government_treasury;
+                  grandTotals.govTreasuryUtilized += util?.government_treasury_utilized || 0;
+                  grandTotals.sdgBudget += subActivity.sdg_funding;
+                  grandTotals.sdgUtilized += util?.sdg_funding_utilized || 0;
+                  grandTotals.partnersBudget += subActivity.partners_funding;
+                  grandTotals.partnersUtilized += util?.partners_funding_utilized || 0;
+                  grandTotals.otherBudget += subActivity.other_funding;
+                  grandTotals.otherUtilized += util?.other_funding_utilized || 0;
+                });
+
+                const totalBudget = grandTotals.govTreasuryBudget + grandTotals.sdgBudget +
+                                    grandTotals.partnersBudget + grandTotals.otherBudget;
+                const totalUtilized = grandTotals.govTreasuryUtilized + grandTotals.sdgUtilized +
+                                      grandTotals.partnersUtilized + grandTotals.otherUtilized;
+
+                return (
+                  <>
+                    <td className="px-2 py-3 text-sm text-center border-r bg-blue-100">
+                      {grandTotals.govTreasuryBudget.toFixed(2)}
+                    </td>
+                    <td className="px-2 py-3 text-sm text-center border-r bg-blue-100">
+                      {grandTotals.govTreasuryUtilized.toFixed(2)}
+                    </td>
+                    <td className="px-2 py-3 text-sm text-center border-r bg-blue-100">
+                      {(grandTotals.govTreasuryBudget - grandTotals.govTreasuryUtilized).toFixed(2)}
+                    </td>
+
+                    <td className="px-2 py-3 text-sm text-center border-r bg-green-100">
+                      {grandTotals.sdgBudget.toFixed(2)}
+                    </td>
+                    <td className="px-2 py-3 text-sm text-center border-r bg-green-100">
+                      {grandTotals.sdgUtilized.toFixed(2)}
+                    </td>
+                    <td className="px-2 py-3 text-sm text-center border-r bg-green-100">
+                      {(grandTotals.sdgBudget - grandTotals.sdgUtilized).toFixed(2)}
+                    </td>
+
+                    <td className="px-2 py-3 text-sm text-center border-r bg-yellow-100">
+                      {grandTotals.partnersBudget.toFixed(2)}
+                    </td>
+                    <td className="px-2 py-3 text-sm text-center border-r bg-yellow-100">
+                      {grandTotals.partnersUtilized.toFixed(2)}
+                    </td>
+                    <td className="px-2 py-3 text-sm text-center border-r bg-yellow-100">
+                      {(grandTotals.partnersBudget - grandTotals.partnersUtilized).toFixed(2)}
+                    </td>
+
+                    <td className="px-2 py-3 text-sm text-center border-r bg-purple-100">
+                      {grandTotals.otherBudget.toFixed(2)}
+                    </td>
+                    <td className="px-2 py-3 text-sm text-center border-r bg-purple-100">
+                      {grandTotals.otherUtilized.toFixed(2)}
+                    </td>
+                    <td className="px-2 py-3 text-sm text-center border-r bg-purple-100">
+                      {(grandTotals.otherBudget - grandTotals.otherUtilized).toFixed(2)}
+                    </td>
+
+                    <td className="px-2 py-3 text-sm text-center border-r bg-gray-300">
+                      {totalBudget.toFixed(2)}
+                    </td>
+                    <td className="px-2 py-3 text-sm text-center border-r bg-gray-300">
+                      {totalUtilized.toFixed(2)}
+                    </td>
+                    <td className="px-2 py-3 text-sm text-center bg-gray-300">
+                      {(totalBudget - totalUtilized).toFixed(2)}
+                    </td>
+                  </>
+                );
+              })()}
+            </tr>
           </tbody>
         </table>
       </div>
