@@ -141,7 +141,10 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
       'Achievement',
       'Achievement (%)',
       'Achievement by Weight',
-      'Justification'
+      'Justification',
+      'Total Budget',
+      'Budget Utilized',
+      'Remaining Budget'
     ];
 
     const excelData = data.map(row => [
@@ -152,7 +155,10 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
       row['Achievement'] || '',
       row['Achievement (%)'] || '',
       row['Achievement by Weight'] || '',
-      row['Justification'] || ''
+      row['Justification'] || '',
+      row['Total Budget'] || '',
+      row['Budget Utilized'] || '',
+      row['Remaining Budget'] || ''
     ]);
 
     const wsData = [...metadataRows, headers, ...excelData];
@@ -167,7 +173,10 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
       { wch: 12 },
       { wch: 15 },
       { wch: 20 },
-      { wch: 40 }
+      { wch: 40 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 15 }
     ];
     ws['!cols'] = colWidths;
 
@@ -205,7 +214,10 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
       row['Achievement'] || '',
       row['Achievement (%)'] || '',
       row['Achievement by Weight'] || '',
-      row['Justification'] || ''
+      row['Justification'] || '',
+      row['Total Budget'] || '',
+      row['Budget Utilized'] || '',
+      row['Remaining Budget'] || ''
     ]);
 
     autoTable(doc, {
@@ -218,21 +230,27 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
         'Achievement',
         'Achievement (%)',
         'Achievement by Weight',
-        'Justification'
+        'Justification',
+        'Total Budget',
+        'Budget Utilized',
+        'Remaining Budget'
       ]],
       body: tableData,
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 3 },
+      styles: { fontSize: 7, cellPadding: 2 },
       headStyles: { fillColor: [66, 139, 202], textColor: 255, fontStyle: 'bold' },
       columnStyles: {
-        0: { cellWidth: 150 },
-        1: { cellWidth: 70 },
-        2: { cellWidth: 50 },
-        3: { cellWidth: 50 },
-        4: { cellWidth: 60 },
-        5: { cellWidth: 70 },
-        6: { cellWidth: 80 },
-        7: { cellWidth: 150 }
+        0: { cellWidth: 120 },
+        1: { cellWidth: 60 },
+        2: { cellWidth: 40 },
+        3: { cellWidth: 40 },
+        4: { cellWidth: 50 },
+        5: { cellWidth: 55 },
+        6: { cellWidth: 65 },
+        7: { cellWidth: 100 },
+        8: { cellWidth: 55 },
+        9: { cellWidth: 55 },
+        10: { cellWidth: 55 }
       },
       didParseCell: (data) => {
         const row = tableData[data.row.index];
@@ -265,7 +283,10 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
         'Type': 'Objective',
         'Target': '',
         'Achievement': '',
-        'Justification': ''
+        'Justification': '',
+        'Total Budget': '',
+        'Budget Utilized': '',
+        'Remaining Budget': ''
       });
 
       objective.initiatives.forEach(initiative => {
@@ -279,7 +300,10 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
           'Type': 'Initiative',
           'Target': '',
           'Achievement': '',
-          'Justification': ''
+          'Justification': '',
+          'Total Budget': '',
+          'Budget Utilized': '',
+          'Remaining Budget': ''
         });
 
         initiative.performanceMeasures.forEach(measure => {
@@ -293,12 +317,25 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
             'Type': 'Performance Measure',
             'Target': Number(measure.target).toFixed(2),
             'Achievement': Number(measure.achievement || 0).toFixed(2),
-            'Justification': measure.justification || ''
+            'Justification': measure.justification || '',
+            'Total Budget': '',
+            'Budget Utilized': '',
+            'Remaining Budget': ''
           });
         });
 
         initiative.mainActivities.forEach(activity => {
           const { achievementPercent, achievementByWeight } = calculateActivityAchievement(activity);
+
+          const totalBudget = (activity.subActivities || []).reduce((sum, sub) =>
+            sum + Number(sub.government_treasury) + Number(sub.sdg_funding) +
+            Number(sub.partners_funding) + Number(sub.other_funding), 0);
+
+          const totalUtilized = (activity.subActivities || []).reduce((sum, sub) =>
+            sum + Number(sub.government_treasury_utilized || 0) + Number(sub.sdg_funding_utilized || 0) +
+            Number(sub.partners_funding_utilized || 0) + Number(sub.other_funding_utilized || 0), 0);
+
+          const totalRemaining = totalBudget - totalUtilized;
 
           rows.push({
             'Strategic Objective': `    ${activity.name}`,
@@ -308,7 +345,36 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
             'Type': 'Main Activity',
             'Target': Number(activity.target).toFixed(2),
             'Achievement': Number(activity.achievement || 0).toFixed(2),
-            'Justification': activity.justification || ''
+            'Justification': activity.justification || '',
+            'Total Budget': totalBudget.toFixed(2),
+            'Budget Utilized': totalUtilized.toFixed(2),
+            'Remaining Budget': totalRemaining.toFixed(2)
+          });
+
+          (activity.subActivities || []).forEach(subActivity => {
+            const subTotalBudget = Number(subActivity.government_treasury) + Number(subActivity.sdg_funding) +
+                                   Number(subActivity.partners_funding) + Number(subActivity.other_funding);
+
+            const subTotalUtilized = Number(subActivity.government_treasury_utilized || 0) +
+                                     Number(subActivity.sdg_funding_utilized || 0) +
+                                     Number(subActivity.partners_funding_utilized || 0) +
+                                     Number(subActivity.other_funding_utilized || 0);
+
+            const subTotalRemaining = subTotalBudget - subTotalUtilized;
+
+            rows.push({
+              'Strategic Objective': `      ${subActivity.name}`,
+              'Weight (%)': '',
+              'Achievement (%)': '',
+              'Achievement by Weight': '',
+              'Type': 'Sub-Activity',
+              'Target': '',
+              'Achievement': '',
+              'Justification': '',
+              'Total Budget': subTotalBudget.toFixed(2),
+              'Budget Utilized': subTotalUtilized.toFixed(2),
+              'Remaining Budget': subTotalRemaining.toFixed(2)
+            });
           });
         });
       });
