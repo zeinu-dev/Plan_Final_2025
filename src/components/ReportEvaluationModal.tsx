@@ -102,14 +102,7 @@ export const ReportEvaluationModal: React.FC<ReportEvaluationModalProps> = ({ re
 
   const handleViewNarrative = () => {
     if (!report.narrative_report) return;
-
-    // Use Google Docs Viewer to view the Word document
-    const fullUrl = report.narrative_report.startsWith('http')
-      ? report.narrative_report
-      : `${window.location.origin}${report.narrative_report}`;
-
-    const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(fullUrl)}&embedded=true`;
-    window.open(viewerUrl, '_blank');
+    window.open(report.narrative_report, '_blank');
   };
 
   const evaluateMutation = useMutation({

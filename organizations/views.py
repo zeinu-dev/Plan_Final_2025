@@ -1904,9 +1904,6 @@ class ReportViewSet(viewsets.ModelViewSet):
 
             filename = os.path.basename(file_path)
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
-            response['Access-Control-Allow-Origin'] = '*'
-            response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
-            response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
 
             return response
 
