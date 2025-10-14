@@ -63,7 +63,7 @@ import { format } from 'date-fns';
 import PlanTypeSelector from '../components/PlanTypeSelector';
 import ObjectiveSelectionMode from '../components/ObjectiveSelectionMode';
 import HorizontalObjectiveSelector from '../components/HorizontalObjectiveSelector';
-import { MyReportsStatus } from '../components/MyReportsStatus';
+import MyReportsStatus from '../components/MyReportsStatus';
 import StrategicObjectivesList from '../components/StrategicObjectivesList';
 import InitiativeList from '../components/InitiativeList';
 import InitiativeForm from '../components/InitiativeForm';

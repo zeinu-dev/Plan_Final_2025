@@ -50,7 +50,7 @@ const getStatusIcon = (status: string) => {
   }
 };
 
-export const MyReportsStatus: React.FC<MyReportsStatusProps> = ({ organizationId }) => {
+const MyReportsStatus: React.FC<MyReportsStatusProps> = ({ organizationId }) => {
   const navigate = useNavigate();
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
@@ -251,3 +251,5 @@ export const MyReportsStatus: React.FC<MyReportsStatusProps> = ({ organizationId
     </div>
   );
 };
+
+export default MyReportsStatus;
