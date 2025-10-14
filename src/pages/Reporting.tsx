@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileText, Upload, AlertCircle, CheckCircle, ArrowLeft, Loader, Save } from 'lucide-react';
+import { FileText, Upload, AlertCircle, CheckCircle, ArrowLeft, Loader, Save, Eye } from 'lucide-react';
 import { api } from '../lib/api';
 import { REPORT_TYPES, Report, ReportPlanData, PerformanceAchievement, ActivityAchievement } from '../types/report';
 import { HorizontalMEReportTable } from '../components/HorizontalMEReportTable';
@@ -150,7 +150,7 @@ const Reporting: React.FC = () => {
         budgets: budgetResponse.data?.results || budgetResponse.data || []
       };
     },
-    enabled: !!reportId && (step === 2 || step === 3 || step === 4)
+    enabled: !!reportId && (step === 2 || step === 3 || step === 4 || step === 5)
   });
 
   const createReportMutation = useMutation({
@@ -294,6 +294,7 @@ const Reporting: React.FC = () => {
       return response;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['report-achievements', reportId] });
       setStep(4);
       setSuccess('Budget utilization saved successfully');
       setTimeout(() => setSuccess(null), 3000);
@@ -348,8 +349,9 @@ const Reporting: React.FC = () => {
       }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
       setSuccess('Report submitted successfully!');
-      setStep(5);
+      setStep(6);
     },
     onError: (err: any) => {
       console.error('Submit mutation error:', err);
@@ -619,20 +621,21 @@ const Reporting: React.FC = () => {
 
       <div className="mb-6">
         <div className="flex items-center justify-between">
-          {[1, 2, 3, 4].map((s) => (
+          {[1, 2, 3, 4, 5].map((s) => (
             <div key={s} className="flex items-center flex-1">
               <div className={`flex items-center justify-center w-10 h-10 rounded-full ${step >= s ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
                 {s}
               </div>
-              {s < 4 && <div className={`flex-1 h-1 mx-2 ${step > s ? 'bg-green-600' : 'bg-gray-200'}`} />}
+              {s < 5 && <div className={`flex-1 h-1 mx-2 ${step > s ? 'bg-green-600' : 'bg-gray-200'}`} />}
             </div>
           ))}
         </div>
         <div className="flex justify-between mt-2">
-          <span className="text-sm text-gray-600">Select Report Type</span>
-          <span className="text-sm text-gray-600">Enter Achievements</span>
-          <span className="text-sm text-gray-600">Upload & Submit</span>
-          <span className="text-sm text-gray-600">M&E Report</span>
+          <span className="text-sm text-gray-600">Select Type</span>
+          <span className="text-sm text-gray-600">Achievements</span>
+          <span className="text-sm text-gray-600">Budget</span>
+          <span className="text-sm text-gray-600">Review M&E</span>
+          <span className="text-sm text-gray-600">Submit</span>
         </div>
       </div>
 
@@ -883,9 +886,51 @@ const Reporting: React.FC = () => {
       )}
 
       {step === 4 && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold mb-4">Step 4: Review M&E Report</h2>
+            <p className="text-gray-600 mb-4">Review your M&E report before submission. You can go back to make changes if needed.</p>
+
+            {isLoadingPlan || !existingAchievements ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader className="h-6 w-6 animate-spin mr-2" />
+                <span>Loading M&E report preview...</span>
+              </div>
+            ) : (
+              <div className="border border-gray-200 rounded-lg">
+                <HorizontalMEReportTable
+                  objectives={getMEReportData()}
+                  organizationName={approvedPlan?.organization_name || 'Organization'}
+                  reportType={selectedReportType}
+                  reportDate={new Date().toISOString()}
+                  plannerName={approvedPlan?.planner_name}
+                />
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-between">
+              <button
+                onClick={() => setStep(3)}
+                className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Back to Budget
+              </button>
+              <button
+                onClick={() => setStep(5)}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center"
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Proceed to Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 5 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold mb-4">Step 4: Upload Narrative Report & Submit</h2>
-          <p className="text-gray-600 mb-4">Attach your narrative report document (Word or Excel format)</p>
+          <h2 className="text-lg font-semibold mb-4">Step 5: Upload Narrative Report & Submit</h2>
+          <p className="text-gray-600 mb-4">Attach your narrative report document (optional) and submit for evaluation</p>
 
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
             <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
@@ -914,10 +959,10 @@ const Reporting: React.FC = () => {
 
           <div className="mt-6 flex justify-between">
             <button
-              onClick={() => setStep(3)}
+              onClick={() => setStep(4)}
               className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
             >
-              Back
+              Back to Review
             </button>
             <button
               onClick={handleFinishReporting}
@@ -931,8 +976,8 @@ const Reporting: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  {currentReport?.status === 'REJECTED' ? 'Resubmit Report' : 'Finish Reporting'}
+                  <Upload className="h-4 w-4 mr-2" />
+                  {currentReport?.status === 'REJECTED' ? 'Resubmit Report' : 'Submit for Evaluation'}
                 </>
               )}
             </button>
@@ -940,11 +985,11 @@ const Reporting: React.FC = () => {
         </div>
       )}
 
-      {step === 5 && (
+      {step === 6 && (
         <div className="space-y-6">
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center">
             <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
-            <span className="text-green-700 font-medium">Report submitted successfully!</span>
+            <span className="text-green-700 font-medium">Report submitted successfully and sent for evaluation!</span>
           </div>
 
           {isLoadingPlan || !existingAchievements ? (

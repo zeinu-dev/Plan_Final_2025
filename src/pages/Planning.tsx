@@ -63,6 +63,7 @@ import { format } from 'date-fns';
 import PlanTypeSelector from '../components/PlanTypeSelector';
 import ObjectiveSelectionMode from '../components/ObjectiveSelectionMode';
 import HorizontalObjectiveSelector from '../components/HorizontalObjectiveSelector';
+import { MyReportsStatus } from '../components/MyReportsStatus';
 import StrategicObjectivesList from '../components/StrategicObjectivesList';
 import InitiativeList from '../components/InitiativeList';
 import InitiativeForm from '../components/InitiativeForm';
@@ -228,6 +229,7 @@ interface PlansTableProps {
 const PlansTable: React.FC<PlansTableProps> = ({ onCreateNewPlan, userOrgId }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'plans' | 'reports'>('plans');
 
   // Fetch user's plans
   const { data: plansResponse, isLoading, refetch } = useQuery({
@@ -451,17 +453,45 @@ const PlansTable: React.FC<PlansTableProps> = ({ onCreateNewPlan, userOrgId }) =
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Your Plans</h2>
-          <button
-            onClick={onCreateNewPlan}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create New Plan
-          </button>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Planning & Reporting Dashboard</h2>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => setActiveTab('plans')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeTab === 'plans'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <FileSpreadsheet className="h-4 w-4 inline mr-2" />
+                My Plans
+              </button>
+              <button
+                onClick={() => setActiveTab('reports')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeTab === 'reports'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <FileText className="h-4 w-4 inline mr-2" />
+                My Reports
+              </button>
+            </div>
+          </div>
+          {activeTab === 'plans' && (
+            <button
+              onClick={onCreateNewPlan}
+              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create New Plan
+            </button>
+          )}
         </div>
 
-        {(!plansResponse || plansResponse.length === 0) ? (
+        {activeTab === 'plans' && (!plansResponse || plansResponse.length === 0) ? (
           <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
             <FileSpreadsheet className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Plans Created</h3>
@@ -474,7 +504,7 @@ const PlansTable: React.FC<PlansTableProps> = ({ onCreateNewPlan, userOrgId }) =
               Create Your First Plan
             </button>
           </div>
-        ) : (
+        ) : activeTab === 'plans' ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -540,6 +570,10 @@ const PlansTable: React.FC<PlansTableProps> = ({ onCreateNewPlan, userOrgId }) =
               </tbody>
             </table>
           </div>
+        ) : null}
+
+        {activeTab === 'reports' && (
+          <MyReportsStatus organizationId={userOrgId || undefined} />
         )}
       </div>
     </div>
