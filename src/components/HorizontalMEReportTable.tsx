@@ -95,10 +95,14 @@ const calculateInitiativeAchievement = (initiative: InitiativeData) => {
   }, 0);
 
   const achievementByWeight = measuresWeight + activitiesWeight;
-  const weight = Number(initiative.weight) || 0;
-  const achievementPercent = weight > 0 ? (achievementByWeight / weight) * 100 : 0;
 
-  return { achievementByWeight, achievementPercent };
+  // Calculate dynamic weight: sum of all performance measures and main activities weights in this report
+  const dynamicWeight = initiative.performanceMeasures.reduce((sum, m) => sum + (Number(m.weight) || 0), 0) +
+                       initiative.mainActivities.reduce((sum, a) => sum + (Number(a.weight) || 0), 0);
+
+  const achievementPercent = dynamicWeight > 0 ? (achievementByWeight / dynamicWeight) * 100 : 0;
+
+  return { achievementByWeight, achievementPercent, dynamicWeight };
 };
 
 const calculateObjectiveAchievement = (objective: ObjectiveData) => {
@@ -106,10 +110,16 @@ const calculateObjectiveAchievement = (objective: ObjectiveData) => {
     return sum + calculateInitiativeAchievement(initiative).achievementByWeight;
   }, 0);
 
-  const weight = Number(objective.weight) || 0;
-  const achievementPercent = weight > 0 ? (achievementByWeight / weight) * 100 : 0;
+  // Calculate dynamic weight: sum of all initiative weights displayed in this report
+  const dynamicWeight = objective.initiatives.reduce((sum, initiative) => {
+    const initWeight = initiative.performanceMeasures.reduce((s, m) => s + (Number(m.weight) || 0), 0) +
+                       initiative.mainActivities.reduce((s, a) => s + (Number(a.weight) || 0), 0);
+    return sum + initWeight;
+  }, 0);
 
-  return { achievementByWeight, achievementPercent };
+  const achievementPercent = dynamicWeight > 0 ? (achievementByWeight / dynamicWeight) * 100 : 0;
+
+  return { achievementByWeight, achievementPercent, dynamicWeight };
 };
 
 export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = ({
@@ -277,7 +287,7 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
 
       rows.push({
         'Strategic Objective': objective.title,
-        'Weight (%)': Number(objective.weight).toFixed(2),
+        'Weight (%)': objAchievement.dynamicWeight.toFixed(2),
         'Achievement (%)': objAchievement.achievementPercent.toFixed(2),
         'Achievement by Weight': objAchievement.achievementByWeight.toFixed(2),
         'Type': 'Objective',
@@ -294,7 +304,7 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
 
         rows.push({
           'Strategic Objective': `  ${initiative.name}`,
-          'Weight (%)': Number(initiative.weight).toFixed(2),
+          'Weight (%)': initAchievement.dynamicWeight.toFixed(2),
           'Achievement (%)': initAchievement.achievementPercent.toFixed(2),
           'Achievement by Weight': initAchievement.achievementByWeight.toFixed(2),
           'Type': 'Initiative',
@@ -463,7 +473,7 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
                       Strategic Objective
                     </td>
                     <td className="px-4 py-3 text-center font-semibold text-gray-900">
-                      {Number(objective.weight).toFixed(2)}%
+                      {objAchievement.dynamicWeight.toFixed(2)}%
                     </td>
                     <td className="px-4 py-3 text-center text-gray-500">—</td>
                     <td className="px-4 py-3 text-center text-gray-500">—</td>
@@ -494,7 +504,7 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
                             Initiative
                           </td>
                           <td className="px-4 py-3 text-center font-medium text-gray-900">
-                            {Number(initiative.weight).toFixed(2)}%
+                            {initAchievement.dynamicWeight.toFixed(2)}%
                           </td>
                           <td className="px-4 py-3 text-center text-gray-500">—</td>
                           <td className="px-4 py-3 text-center text-gray-500">—</td>
