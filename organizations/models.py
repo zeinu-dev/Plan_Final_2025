@@ -1352,7 +1352,7 @@ class PerformanceAchievement(models.Model):
         related_name='achievements'
     )
     achievement = models.DecimalField(
-        max_digits=10,
+        max_digits=15,
         decimal_places=2,
         help_text="Actual achievement for the reporting period"
     )
@@ -1381,7 +1381,7 @@ class ActivityAchievement(models.Model):
         related_name='achievements'
     )
     achievement = models.DecimalField(
-        max_digits=10,
+        max_digits=15,
         decimal_places=2,
         help_text="Actual achievement for the reporting period"
     )
