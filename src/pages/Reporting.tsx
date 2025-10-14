@@ -111,7 +111,7 @@ const Reporting: React.FC = () => {
 
       return response.data;
     },
-    enabled: !!reportId && (step === 2 || step === 3 || step === 4),
+    enabled: !!reportId && (step === 2 || step === 3 || step === 4 || step === 6),
     retry: 1
   });
 
@@ -165,7 +165,7 @@ const Reporting: React.FC = () => {
         budgets: budgetResponse.data?.results || budgetResponse.data || []
       };
     },
-    enabled: !!reportId && (step === 2 || step === 3 || step === 4 || step === 5)
+    enabled: !!reportId && (step === 2 || step === 3 || step === 4 || step === 5 || step === 6)
   });
 
   const createReportMutation = useMutation({
