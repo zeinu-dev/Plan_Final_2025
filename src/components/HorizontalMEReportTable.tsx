@@ -95,10 +95,14 @@ const calculateInitiativeAchievement = (initiative: InitiativeData) => {
   }, 0);
 
   const achievementByWeight = measuresWeight + activitiesWeight;
-  const weight = Number(initiative.weight) || 0;
-  const achievementPercent = weight > 0 ? (achievementByWeight / weight) * 100 : 0;
 
-  return { achievementByWeight, achievementPercent };
+  // Dynamic initiative weight: sum of all performance measures + main activities weights in this filtered report period
+  const dynamicWeight = initiative.performanceMeasures.reduce((sum, m) => sum + (Number(m.weight) || 0), 0) +
+                       initiative.mainActivities.reduce((sum, a) => sum + (Number(a.weight) || 0), 0);
+
+  const achievementPercent = dynamicWeight > 0 ? (achievementByWeight / dynamicWeight) * 100 : 0;
+
+  return { achievementByWeight, achievementPercent, dynamicWeight };
 };
 
 const calculateObjectiveAchievement = (objective: ObjectiveData) => {
@@ -106,9 +110,11 @@ const calculateObjectiveAchievement = (objective: ObjectiveData) => {
     return sum + calculateInitiativeAchievement(initiative).achievementByWeight;
   }, 0);
 
-  // Dynamic weight: sum of all initiative weights displayed in this report period
+  // Dynamic objective weight: sum of all initiative weights (which are themselves dynamically calculated) in this report period
   const dynamicWeight = objective.initiatives.reduce((sum, initiative) => {
-    return sum + (Number(initiative.weight) || 0);
+    const initDynamicWeight = initiative.performanceMeasures.reduce((s, m) => s + (Number(m.weight) || 0), 0) +
+                              initiative.mainActivities.reduce((s, a) => s + (Number(a.weight) || 0), 0);
+    return sum + initDynamicWeight;
   }, 0);
 
   const achievementPercent = dynamicWeight > 0 ? (achievementByWeight / dynamicWeight) * 100 : 0;
@@ -298,7 +304,7 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
 
         rows.push({
           'Strategic Objective': `  ${initiative.name}`,
-          'Weight (%)': Number(initiative.weight).toFixed(2),
+          'Weight (%)': initAchievement.dynamicWeight.toFixed(2),
           'Achievement (%)': initAchievement.achievementPercent.toFixed(2),
           'Achievement by Weight': initAchievement.achievementByWeight.toFixed(2),
           'Type': 'Initiative',
@@ -498,7 +504,7 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
                             Initiative
                           </td>
                           <td className="px-4 py-3 text-center font-medium text-gray-900">
-                            {Number(initiative.weight).toFixed(2)}%
+                            {initAchievement.dynamicWeight.toFixed(2)}%
                           </td>
                           <td className="px-4 py-3 text-center text-gray-500">—</td>
                           <td className="px-4 py-3 text-center text-gray-500">—</td>

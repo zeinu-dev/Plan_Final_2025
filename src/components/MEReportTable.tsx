@@ -81,10 +81,14 @@ const calculateInitiativeAchievement = (initiative: InitiativeData) => {
   }, 0);
 
   const achievementByWeight = measuresWeight + activitiesWeight;
-  const weight = Number(initiative.weight) || 0;
-  const achievementPercent = weight > 0 ? (achievementByWeight / weight) * 100 : 0;
 
-  return { achievementByWeight, achievementPercent };
+  // Dynamic initiative weight: sum of all performance measures + main activities weights in this filtered report period
+  const dynamicWeight = initiative.performanceMeasures.reduce((sum, m) => sum + (Number(m.weight) || 0), 0) +
+                       initiative.mainActivities.reduce((sum, a) => sum + (Number(a.weight) || 0), 0);
+
+  const achievementPercent = dynamicWeight > 0 ? (achievementByWeight / dynamicWeight) * 100 : 0;
+
+  return { achievementByWeight, achievementPercent, dynamicWeight };
 };
 
 const calculateObjectiveAchievement = (objective: ObjectiveData) => {
@@ -92,9 +96,11 @@ const calculateObjectiveAchievement = (objective: ObjectiveData) => {
     return sum + calculateInitiativeAchievement(initiative).achievementByWeight;
   }, 0);
 
-  // Dynamic weight: sum of all initiative weights displayed in this report period
+  // Dynamic objective weight: sum of all initiative weights (which are themselves dynamically calculated) in this report period
   const dynamicWeight = objective.initiatives.reduce((sum, initiative) => {
-    return sum + (Number(initiative.weight) || 0);
+    const initDynamicWeight = initiative.performanceMeasures.reduce((s, m) => s + (Number(m.weight) || 0), 0) +
+                              initiative.mainActivities.reduce((s, a) => s + (Number(a.weight) || 0), 0);
+    return sum + initDynamicWeight;
   }, 0);
 
   const achievementPercent = dynamicWeight > 0 ? (achievementByWeight / dynamicWeight) * 100 : 0;
@@ -159,7 +165,7 @@ export const MEReportTable: React.FC<MEReportTableProps> = ({ objectives }) => {
                             Strategic Initiative: {initiative.name}
                           </h4>
                           <p className="text-sm text-indigo-700">
-                            Weight: {Number(initiative.weight).toFixed(2)}%
+                            Weight: {initAchievement.dynamicWeight.toFixed(2)}%
                           </p>
                         </div>
                         <div className="text-right">
