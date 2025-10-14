@@ -72,7 +72,11 @@ const MyReportsStatus: React.FC<MyReportsStatusProps> = ({ organizationId }) => 
   });
 
   const handleViewReport = (report: Report) => {
-    navigate(`/reporting?plan=${report.plan}`);
+    if (report.status === 'SUBMITTED' || report.status === 'APPROVED') {
+      navigate(`/reporting?plan=${report.plan}&report=${report.id}&view=true`);
+    } else {
+      navigate(`/reporting?plan=${report.plan}&report=${report.id}`);
+    }
   };
 
   if (error) {

@@ -12,10 +12,12 @@ const Reporting: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const planId = searchParams.get('plan');
+  const reportIdParam = searchParams.get('report');
+  const viewMode = searchParams.get('view') === 'true';
 
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(viewMode ? 6 : 1);
   const [selectedReportType, setSelectedReportType] = useState('');
-  const [reportId, setReportId] = useState<number | null>(null);
+  const [reportId, setReportId] = useState<number | null>(reportIdParam ? parseInt(reportIdParam) : null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [narrativeFile, setNarrativeFile] = useState<File | null>(null);
@@ -24,6 +26,19 @@ const Reporting: React.FC = () => {
   const [activityAchievements, setActivityAchievements] = useState<Record<number, ActivityAchievement>>({});
   const [budgetUtilizations, setBudgetUtilizations] = useState<Record<number, any>>({});
   const [currentReport, setCurrentReport] = useState<Report | null>(null);
+
+  const { data: existingReport } = useQuery({
+    queryKey: ['existing-report', reportIdParam],
+    queryFn: async () => {
+      if (!reportIdParam) return null;
+      const response = await api.get(`/reports/${reportIdParam}/`);
+      const report = response.data;
+      setCurrentReport(report);
+      setSelectedReportType(report.report_type);
+      return report;
+    },
+    enabled: !!reportIdParam && viewMode
+  });
 
   const { data: approvedPlan, isLoading: isLoadingApprovedPlan, error: planError } = useQuery({
     queryKey: ['approved-plan', planId],
@@ -619,25 +634,27 @@ const Reporting: React.FC = () => {
         </div>
       )}
 
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          {[1, 2, 3, 4, 5].map((s) => (
-            <div key={s} className="flex items-center flex-1">
-              <div className={`flex items-center justify-center w-10 h-10 rounded-full ${step >= s ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                {s}
+      {!viewMode && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between">
+            {[1, 2, 3, 4, 5].map((s) => (
+              <div key={s} className="flex items-center flex-1">
+                <div className={`flex items-center justify-center w-10 h-10 rounded-full ${step >= s ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                  {s}
+                </div>
+                {s < 5 && <div className={`flex-1 h-1 mx-2 ${step > s ? 'bg-green-600' : 'bg-gray-200'}`} />}
               </div>
-              {s < 5 && <div className={`flex-1 h-1 mx-2 ${step > s ? 'bg-green-600' : 'bg-gray-200'}`} />}
-            </div>
-          ))}
+            ))}
+          </div>
+          <div className="flex justify-between mt-2">
+            <span className="text-sm text-gray-600">Select Type</span>
+            <span className="text-sm text-gray-600">Achievements</span>
+            <span className="text-sm text-gray-600">Budget</span>
+            <span className="text-sm text-gray-600">Review M&E</span>
+            <span className="text-sm text-gray-600">Submit</span>
+          </div>
         </div>
-        <div className="flex justify-between mt-2">
-          <span className="text-sm text-gray-600">Select Type</span>
-          <span className="text-sm text-gray-600">Achievements</span>
-          <span className="text-sm text-gray-600">Budget</span>
-          <span className="text-sm text-gray-600">Review M&E</span>
-          <span className="text-sm text-gray-600">Submit</span>
-        </div>
-      </div>
+      )}
 
       {step === 1 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -987,10 +1004,30 @@ const Reporting: React.FC = () => {
 
       {step === 6 && (
         <div className="space-y-6">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center">
-            <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
-            <span className="text-green-700 font-medium">Report submitted successfully and sent for evaluation!</span>
-          </div>
+          {viewMode ? (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start">
+                <Eye className="h-5 w-5 text-blue-600 mr-2 mt-0.5" />
+                <div>
+                  <h3 className="text-blue-700 font-medium">Viewing Submitted Report</h3>
+                  <p className="text-blue-600 text-sm mt-1">
+                    Status: <span className="font-semibold">{currentReport?.status_display || currentReport?.status}</span>
+                    {currentReport?.evaluator_name && ` • Evaluator: ${currentReport.evaluator_name}`}
+                  </p>
+                  {currentReport?.evaluator_feedback && (
+                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                      <p className="text-sm text-yellow-800"><strong>Evaluator Feedback:</strong> {currentReport.evaluator_feedback}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center">
+              <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+              <span className="text-green-700 font-medium">Report submitted successfully and sent for evaluation!</span>
+            </div>
+          )}
 
           {isLoadingPlan || !existingAchievements ? (
             <div className="flex items-center justify-center py-12 bg-white rounded-lg shadow-sm border border-gray-200">
