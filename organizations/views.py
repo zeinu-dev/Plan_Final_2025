@@ -2331,12 +2331,12 @@ class ReportViewSet(viewsets.ModelViewSet):
             'YEARLY': ['Q1', 'Q2', 'Q3', 'Q4']
         }
 
-        # Map quarters to months
+        # Map quarters to months (using abbreviated format matching frontend)
         quarter_months_map = {
-            'Q1': ['July', 'August', 'September'],
-            'Q2': ['October', 'November', 'December'],
-            'Q3': ['January', 'February', 'March'],
-            'Q4': ['April', 'May', 'June']
+            'Q1': ['JUL', 'AUG', 'SEP'],
+            'Q2': ['OCT', 'NOV', 'DEC'],
+            'Q3': ['JAN', 'FEB', 'MAR'],
+            'Q4': ['APR', 'MAY', 'JUN']
         }
 
         # Check if this activity/measure is planned for the report period
