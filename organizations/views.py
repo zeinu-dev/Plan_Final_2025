@@ -2342,19 +2342,24 @@ class ReportViewSet(viewsets.ModelViewSet):
         # Check if this activity/measure is planned for the report period
         required_quarters = report_quarters_map.get(report_type, [])
 
-        # Check if any of the required quarters are in selected_quarters
-        has_matching_quarter = any(q in selected_quarters for q in required_quarters)
-
-        # Check if any months from required quarters are in selected_months
-        has_matching_month = False
-        if selected_months:
-            required_months = []
+        # If quarters are selected, check if any required quarter is selected
+        if selected_quarters:
+            has_matching_quarter = any(q in selected_quarters for q in required_quarters)
+            if not has_matching_quarter:
+                return None
+        # If only months are selected, check if months match
+        elif selected_months:
+            # For each required quarter, check if at least one month from that quarter is selected
+            has_any_month = False
             for q in required_quarters:
-                required_months.extend(quarter_months_map.get(q, []))
-            has_matching_month = any(m in selected_months for m in required_months)
-
-        # If not planned for this period, return None
-        if not has_matching_quarter and not has_matching_month:
+                quarter_months = quarter_months_map.get(q, [])
+                if any(m in selected_months for m in quarter_months):
+                    has_any_month = True
+                    break
+            if not has_any_month:
+                return None
+        else:
+            # No periods selected at all
             return None
 
         # Check if quarterly targets are defined (non-zero)
