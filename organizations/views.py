@@ -2314,8 +2314,49 @@ class ReportViewSet(viewsets.ModelViewSet):
     def _get_target_for_period(self, obj, report_type):
         """
         Get the target value for a specific reporting period.
-        Checks quarterly targets first, falls back to annual target if needed.
+        Filters based on selected_quarters/selected_months and returns appropriate target.
         """
+        # Get selected periods
+        selected_quarters = obj.selected_quarters if hasattr(obj, 'selected_quarters') and obj.selected_quarters else []
+        selected_months = obj.selected_months if hasattr(obj, 'selected_months') and obj.selected_months else []
+
+        # Map report types to quarters
+        report_quarters_map = {
+            'Q1': ['Q1'],
+            'Q2': ['Q2'],
+            'Q3': ['Q3'],
+            'Q4': ['Q4'],
+            '6M': ['Q1', 'Q2'],
+            '9M': ['Q1', 'Q2', 'Q3'],
+            'YEARLY': ['Q1', 'Q2', 'Q3', 'Q4']
+        }
+
+        # Map quarters to months
+        quarter_months_map = {
+            'Q1': ['July', 'August', 'September'],
+            'Q2': ['October', 'November', 'December'],
+            'Q3': ['January', 'February', 'March'],
+            'Q4': ['April', 'May', 'June']
+        }
+
+        # Check if this activity/measure is planned for the report period
+        required_quarters = report_quarters_map.get(report_type, [])
+
+        # Check if any of the required quarters are in selected_quarters
+        has_matching_quarter = any(q in selected_quarters for q in required_quarters)
+
+        # Check if any months from required quarters are in selected_months
+        has_matching_month = False
+        if selected_months:
+            required_months = []
+            for q in required_quarters:
+                required_months.extend(quarter_months_map.get(q, []))
+            has_matching_month = any(m in selected_months for m in required_months)
+
+        # If not planned for this period, return None
+        if not has_matching_quarter and not has_matching_month:
+            return None
+
         # Check if quarterly targets are defined (non-zero)
         has_quarterly = any([
             obj.q1_target and obj.q1_target > 0,
