@@ -763,8 +763,8 @@ const Reporting: React.FC = () => {
                                 <td className="px-4 py-2">
                                   <input
                                     type="number"
-                                    value={performanceAchievements[measure.id]?.achievement || ''}
-                                    onChange={(e) => handlePerformanceAchievementChange(measure.id, 'achievement', parseFloat(e.target.value))}
+                                    value={performanceAchievements[measure.id]?.achievement ?? ''}
+                                    onChange={(e) => handlePerformanceAchievementChange(measure.id, 'achievement', e.target.value === '' ? undefined : parseFloat(e.target.value))}
                                     className="w-full px-2 py-1 border border-gray-300 rounded"
                                     placeholder="0"
                                   />
@@ -809,8 +809,8 @@ const Reporting: React.FC = () => {
                                 <td className="px-4 py-2">
                                   <input
                                     type="number"
-                                    value={activityAchievements[activity.id]?.achievement || ''}
-                                    onChange={(e) => handleActivityAchievementChange(activity.id, 'achievement', parseFloat(e.target.value))}
+                                    value={activityAchievements[activity.id]?.achievement ?? ''}
+                                    onChange={(e) => handleActivityAchievementChange(activity.id, 'achievement', e.target.value === '' ? undefined : parseFloat(e.target.value))}
                                     className="w-full px-2 py-1 border border-gray-300 rounded"
                                     placeholder="0"
                                   />
