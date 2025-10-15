@@ -60,11 +60,26 @@ interface HorizontalMEReportTableProps {
 }
 
 const getPerformanceColor = (percentage: number): string => {
-  if (percentage < 55) return 'bg-red-100 text-red-800';
-  if (percentage >= 55 && percentage < 65) return 'bg-orange-100 text-orange-800';
-  if (percentage >= 65 && percentage < 80) return 'bg-yellow-100 text-yellow-800';
-  if (percentage >= 80 && percentage < 95) return 'bg-blue-100 text-blue-800';
-  return 'bg-green-100 text-green-800';
+  // Report Color Code
+  // 1. Dark Green (#00A300) - ≥95%
+  // 2. Light Green (#93C572) - 80-94.99%
+  // 3. Dark Yellow (#FFFF00) - 65-79.99%
+  // 4. Light Yellow (#FFBF00) - 55-64.99%
+  // 5. Red (#F2250A) - <55%
+
+  if (percentage < 55) return 'text-white font-bold';
+  if (percentage >= 55 && percentage < 65) return 'text-gray-900 font-bold';
+  if (percentage >= 65 && percentage < 80) return 'text-gray-900 font-bold';
+  if (percentage >= 80 && percentage < 95) return 'text-white font-bold';
+  return 'text-white font-bold';
+};
+
+const getPerformanceBackgroundColor = (percentage: number): string => {
+  if (percentage < 55) return '#F2250A';
+  if (percentage >= 55 && percentage < 65) return '#FFBF00';
+  if (percentage >= 65 && percentage < 80) return '#FFFF00';
+  if (percentage >= 80 && percentage < 95) return '#93C572';
+  return '#00A300';
 };
 
 const calculateMeasureAchievement = (measure: PerformanceMeasureData) => {
@@ -478,7 +493,10 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
                     <td className="px-4 py-3 text-center text-gray-500">—</td>
                     <td className="px-4 py-3 text-center text-gray-500">—</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${getPerformanceColor(objAchievement.achievementPercent)}`}>
+                      <span
+                        className={`inline-block px-2 py-1 rounded text-xs ${getPerformanceColor(objAchievement.achievementPercent)}`}
+                        style={{ backgroundColor: getPerformanceBackgroundColor(objAchievement.achievementPercent) }}
+                      >
                         {objAchievement.achievementPercent.toFixed(2)}%
                       </span>
                     </td>
@@ -509,7 +527,10 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
                           <td className="px-4 py-3 text-center text-gray-500">—</td>
                           <td className="px-4 py-3 text-center text-gray-500">—</td>
                           <td className="px-4 py-3 text-center">
-                            <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${getPerformanceColor(initAchievement.achievementPercent)}`}>
+                            <span
+                              className={`inline-block px-2 py-1 rounded text-xs ${getPerformanceColor(initAchievement.achievementPercent)}`}
+                              style={{ backgroundColor: getPerformanceBackgroundColor(initAchievement.achievementPercent) }}
+                            >
                               {initAchievement.achievementPercent.toFixed(2)}%
                             </span>
                           </td>
@@ -543,7 +564,10 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
                                 {Number(measure.achievement || 0).toFixed(2)}
                               </td>
                               <td className="px-4 py-2 text-center">
-                                <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${getPerformanceColor(achievementPercent)}`}>
+                                <span
+                                  className={`inline-block px-2 py-1 rounded text-xs ${getPerformanceColor(achievementPercent)}`}
+                                  style={{ backgroundColor: getPerformanceBackgroundColor(achievementPercent) }}
+                                >
                                   {achievementPercent.toFixed(2)}%
                                 </span>
                               </td>
@@ -589,7 +613,10 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
                                   {Number(activity.achievement || 0).toFixed(2)}
                                 </td>
                                 <td className="px-4 py-2 text-center">
-                                  <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${getPerformanceColor(achievementPercent)}`}>
+                                  <span
+                                    className={`inline-block px-2 py-1 rounded text-xs ${getPerformanceColor(achievementPercent)}`}
+                                    style={{ backgroundColor: getPerformanceBackgroundColor(achievementPercent) }}
+                                  >
                                     {achievementPercent.toFixed(2)}%
                                   </span>
                                 </td>
