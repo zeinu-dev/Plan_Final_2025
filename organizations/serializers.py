@@ -744,3 +744,171 @@ class ReportSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Can only create reports for approved plans')
 
         return data
+
+
+# ===================================
+# ADMIN-SPECIFIC SERIALIZERS
+# These serializers are used for admin views and DO NOT filter by organization
+# ===================================
+
+class AdminStrategicObjectiveSerializer(serializers.ModelSerializer):
+    """Admin serializer that returns ALL initiatives without organization filtering"""
+    programs = serializers.SerializerMethodField()
+    initiatives = serializers.SerializerMethodField()
+    effective_weight = serializers.SerializerMethodField()
+    total_initiatives_weight = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StrategicObjective
+        fields = [
+            'id', 'title', 'description', 'weight', 'planner_weight', 'effective_weight',
+            'is_default', 'created_at', 'updated_at', 'programs', 'initiatives',
+            'total_initiatives_weight'
+        ]
+
+    def get_effective_weight(self, obj):
+        try:
+            effective_weight = obj.get_effective_weight()
+            if effective_weight is None:
+                return float(obj.weight) if obj.weight is not None else 0.0
+            return float(effective_weight)
+        except (ValueError, TypeError, AttributeError):
+            try:
+                return float(obj.weight) if obj.weight is not None else 0.0
+            except (ValueError, TypeError):
+                return 0.0
+
+    def get_programs(self, obj):
+        try:
+            programs = obj.programs.all()
+            return ProgramSerializer(programs, many=True).data
+        except Exception as e:
+            print(f"AdminStrategicObjectiveSerializer - Error getting programs: {e}")
+            return []
+
+    def get_initiatives(self, obj):
+        """Return ALL initiatives without any organization filtering"""
+        try:
+            # Get ALL initiatives for this objective
+            initiatives = obj.initiatives.all()
+            print(f"[ADMIN SERIALIZER] Objective '{obj.title}': Found {initiatives.count()} initiatives (no filtering)")
+
+            # Use admin initiative serializer
+            from .serializers import AdminStrategicInitiativeSerializer
+            serialized = AdminStrategicInitiativeSerializer(initiatives, many=True).data
+            print(f"[ADMIN SERIALIZER] Serialized {len(serialized)} initiatives")
+
+            return serialized
+        except Exception as e:
+            print(f"AdminStrategicObjectiveSerializer - Error getting initiatives: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+    def get_total_initiatives_weight(self, obj):
+        try:
+            initiatives = obj.initiatives.all()
+            total = sum(float(i.weight or 0) for i in initiatives)
+            return total
+        except Exception as e:
+            print(f"AdminStrategicObjectiveSerializer - Error calculating total weight: {e}")
+            return 0
+
+
+class AdminStrategicInitiativeSerializer(serializers.ModelSerializer):
+    """Admin serializer that returns ALL measures and activities without organization filtering"""
+    organization_name = serializers.CharField(source='organization.name', read_only=True)
+    performance_measures = serializers.SerializerMethodField()
+    main_activities = serializers.SerializerMethodField()
+    total_measures_weight = serializers.SerializerMethodField()
+    total_activities_weight = serializers.SerializerMethodField()
+    initiative_feed_name = serializers.CharField(source='initiative_feed.name', read_only=True)
+
+    class Meta:
+        model = StrategicInitiative
+        fields = [
+            'id', 'name', 'weight', 'strategic_objective', 'program', 'organization',
+            'organization_name', 'is_default', 'initiative_feed', 'initiative_feed_name',
+            'performance_measures', 'main_activities', 'total_measures_weight',
+            'total_activities_weight', 'created_at', 'updated_at'
+        ]
+
+    def get_performance_measures(self, obj):
+        """Return ALL performance measures without any organization filtering"""
+        try:
+            measures = obj.performance_measures.all()
+            print(f"[ADMIN SERIALIZER] Initiative '{obj.name}': Found {measures.count()} measures (no filtering)")
+            return PerformanceMeasureSerializer(measures, many=True).data
+        except Exception as e:
+            print(f"AdminStrategicInitiativeSerializer - Error getting measures: {e}")
+            return []
+
+    def get_main_activities(self, obj):
+        """Return ALL main activities without any organization filtering"""
+        try:
+            activities = obj.main_activities.all()
+            print(f"[ADMIN SERIALIZER] Initiative '{obj.name}': Found {activities.count()} activities (no filtering)")
+            return MainActivitySerializer(activities, many=True).data
+        except Exception as e:
+            print(f"AdminStrategicInitiativeSerializer - Error getting activities: {e}")
+            return []
+
+    def get_total_measures_weight(self, obj):
+        try:
+            measures = obj.performance_measures.all()
+            return sum(float(m.weight or 0) for m in measures)
+        except Exception:
+            return 0
+
+    def get_total_activities_weight(self, obj):
+        try:
+            activities = obj.main_activities.all()
+            return sum(float(a.weight or 0) for a in activities)
+        except Exception:
+            return 0
+
+
+class AdminPlanSerializer(serializers.ModelSerializer):
+    """Admin serializer for plans that returns ALL data without organization filtering"""
+    organization_name = serializers.CharField(source='organization.name', read_only=True)
+    objectives = serializers.SerializerMethodField()
+    reviews = PlanReviewSerializer(many=True, read_only=True)
+    selected_objectives = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=StrategicObjective.objects.all(),
+        required=False
+    )
+    selected_objectives_weights = serializers.JSONField(required=False, allow_null=True)
+    strategic_objective = serializers.PrimaryKeyRelatedField(
+        queryset=StrategicObjective.objects.all(),
+        required=False,
+        allow_null=True
+    )
+
+    class Meta:
+        model = Plan
+        fields = [
+            'id', 'organization', 'organization_name', 'planner_name', 'type',
+            'executive_name', 'strategic_objective', 'program', 'fiscal_year',
+            'from_date', 'to_date', 'status', 'submitted_at', 'selected_objectives',
+            'selected_objectives_weights', 'objectives', 'reviews',
+            'created_at', 'updated_at'
+        ]
+
+    def get_objectives(self, obj):
+        """Get all selected objectives with their complete data - NO organization filtering"""
+        selected_objectives = obj.selected_objectives.all()
+
+        if not selected_objectives and obj.strategic_objective:
+            selected_objectives = [obj.strategic_objective]
+
+        print(f"[ADMIN PLAN SERIALIZER] Plan {obj.id}: Serializing {len(selected_objectives)} objectives")
+
+        # Use admin objective serializer
+        serialized_data = AdminStrategicObjectiveSerializer(selected_objectives, many=True).data
+
+        for idx, obj_data in enumerate(serialized_data):
+            initiatives_count = len(obj_data.get('initiatives', []))
+            print(f"[ADMIN PLAN SERIALIZER] Objective {idx}: '{obj_data.get('title')}' has {initiatives_count} initiatives")
+
+        return serialized_data

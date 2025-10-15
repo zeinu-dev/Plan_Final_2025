@@ -32,7 +32,8 @@ from .serializers import (
     AirTransportSerializer, PerDiemSerializer, AccommodationSerializer,
     ParticipantCostSerializer, SessionCostSerializer, PrintingCostSerializer,
     SupervisorCostSerializer,ProcurementItemSerializer, ReportSerializer,
-    PerformanceAchievementSerializer, ActivityAchievementSerializer, SubActivityBudgetUtilizationSerializer
+    PerformanceAchievementSerializer, ActivityAchievementSerializer, SubActivityBudgetUtilizationSerializer,
+    AdminPlanSerializer
 )
 
 # Set up logger
@@ -1667,6 +1668,48 @@ class PlanViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         except Exception as e:
             logger.exception("Error fetching pending reviews")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['get'], url_path='admin-detail')
+    def admin_detail(self, request, pk=None):
+        """
+        Get plan details for admin view - returns ALL data without organization filtering.
+        This endpoint uses AdminPlanSerializer which bypasses organization filtering.
+        Only accessible to users with ADMIN role.
+        """
+        try:
+            # Check if user is an admin
+            user_organizations = OrganizationUser.objects.filter(user=request.user)
+            user_roles = user_organizations.values_list('role', flat=True)
+
+            if 'ADMIN' not in user_roles:
+                logger.warning(f"Non-admin user {request.user.username} attempted to access admin_detail endpoint")
+                return Response(
+                    {'error': 'Only admins can access this endpoint'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Get the plan without organization filtering
+            plan = Plan.objects.select_related(
+                'organization', 'strategic_objective'
+            ).prefetch_related(
+                'reviews', 'selected_objectives'
+            ).get(pk=pk)
+
+            logger.info(f"[ADMIN DETAIL] Admin {request.user.username} viewing plan {pk}")
+            logger.info(f"[ADMIN DETAIL] Plan organization: {plan.organization.name}, status: {plan.status}")
+
+            # Use AdminPlanSerializer which doesn't filter by organization
+            serializer = AdminPlanSerializer(plan)
+
+            logger.info(f"[ADMIN DETAIL] Returning admin plan data for plan {pk}")
+            return Response(serializer.data)
+
+        except Plan.DoesNotExist:
+            logger.error(f"Plan {pk} not found")
+            return Response({'error': 'Plan not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception(f"Error in admin_detail for plan {pk}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class PlanReviewViewSet(viewsets.ModelViewSet):

@@ -13,19 +13,24 @@ const AdminPlanSummary: React.FC = () => {
   const { t } = useLanguage();
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch plan data - backend includes objectives with nested data via PlanSerializer
+  // Fetch plan data using admin-specific endpoint that returns ALL data without filtering
   const { data: planData, isLoading, error: planError } = useQuery({
     queryKey: ['admin-plan-summary', planId],
     queryFn: async () => {
       if (!planId) throw new Error('Plan ID is required');
 
-      // The /plans/:id/ endpoint returns objectives via get_objectives() which includes all nested data
-      const response = await api.get(`/plans/${planId}/`);
-      console.log('Admin Plan Summary - Full API Response:', response.data);
-      console.log('Admin Plan Summary - Objectives:', response.data?.objectives);
+      // Use admin-detail endpoint which uses AdminPlanSerializer (no organization filtering)
+      const response = await api.get(`/plans/${planId}/admin-detail/`);
+      console.log('[ADMIN PLAN SUMMARY] Full API Response from /admin-detail/:', response.data);
+      console.log('[ADMIN PLAN SUMMARY] Objectives:', response.data?.objectives);
       if (response.data?.objectives && response.data.objectives.length > 0) {
-        console.log('Admin Plan Summary - First Objective:', response.data.objectives[0]);
-        console.log('Admin Plan Summary - First Objective Initiatives:', response.data.objectives[0]?.initiatives);
+        console.log('[ADMIN PLAN SUMMARY] First Objective:', response.data.objectives[0]);
+        console.log('[ADMIN PLAN SUMMARY] First Objective Initiatives:', response.data.objectives[0]?.initiatives);
+        if (response.data.objectives[0]?.initiatives?.[0]) {
+          console.log('[ADMIN PLAN SUMMARY] First Initiative:', response.data.objectives[0].initiatives[0]);
+          console.log('[ADMIN PLAN SUMMARY] First Initiative Measures:', response.data.objectives[0].initiatives[0]?.performance_measures);
+          console.log('[ADMIN PLAN SUMMARY] First Initiative Activities:', response.data.objectives[0].initiatives[0]?.main_activities);
+        }
       }
       return response.data;
     },
