@@ -850,7 +850,7 @@ class AdminStrategicInitiativeSerializer(serializers.ModelSerializer):
         ]
 
     def get_performance_measures(self, obj):
-        """Return performance measures filtered by plan's organization (defaults + org-specific)"""
+        """Return performance measures filtered by plan's organization"""
         try:
             all_measures = obj.performance_measures.all()
             print(f"[ADMIN SERIALIZER] Initiative '{obj.name}': Found {all_measures.count()} total measures")
@@ -858,22 +858,24 @@ class AdminStrategicInitiativeSerializer(serializers.ModelSerializer):
             plan_org_id = self.context.get('plan_organization_id')
 
             if plan_org_id:
-                from django.db.models import Q
-                filtered_measures = all_measures.filter(
-                    Q(is_default=True) | Q(organization_id=plan_org_id)
-                )
-                print(f"[ADMIN SERIALIZER] Filtered to {filtered_measures.count()} measures (defaults + org {plan_org_id})")
+                # PerformanceMeasure doesn't have is_default field, only filter by organization
+                filtered_measures = all_measures.filter(organization_id=plan_org_id)
+                print(f"[ADMIN SERIALIZER] Filtered to {filtered_measures.count()} measures for org {plan_org_id}")
                 measures = filtered_measures
             else:
                 measures = all_measures
 
-            return PerformanceMeasureSerializer(measures, many=True).data
+            serialized = PerformanceMeasureSerializer(measures, many=True).data
+            print(f"[ADMIN SERIALIZER] Serialized {len(serialized)} measures")
+            return serialized
         except Exception as e:
             print(f"AdminStrategicInitiativeSerializer - Error getting measures: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     def get_main_activities(self, obj):
-        """Return main activities filtered by plan's organization (defaults + org-specific)"""
+        """Return main activities filtered by plan's organization"""
         try:
             all_activities = obj.main_activities.all()
             print(f"[ADMIN SERIALIZER] Initiative '{obj.name}': Found {all_activities.count()} total activities")
@@ -881,18 +883,22 @@ class AdminStrategicInitiativeSerializer(serializers.ModelSerializer):
             plan_org_id = self.context.get('plan_organization_id')
 
             if plan_org_id:
-                from django.db.models import Q
-                filtered_activities = all_activities.filter(
-                    Q(is_default=True) | Q(organization_id=plan_org_id)
-                )
-                print(f"[ADMIN SERIALIZER] Filtered to {filtered_activities.count()} activities (defaults + org {plan_org_id})")
+                # MainActivity doesn't have is_default field, only filter by organization
+                filtered_activities = all_activities.filter(organization_id=plan_org_id)
+                print(f"[ADMIN SERIALIZER] Filtered to {filtered_activities.count()} activities for org {plan_org_id}")
                 activities = filtered_activities
             else:
                 activities = all_activities
 
-            return MainActivitySerializer(activities, many=True, context=self.context).data
+            serialized = MainActivitySerializer(activities, many=True, context=self.context).data
+            print(f"[ADMIN SERIALIZER] Serialized {len(serialized)} activities with sub_activities")
+            for idx, act in enumerate(serialized):
+                print(f"[ADMIN SERIALIZER]   Activity {idx}: '{act.get('name')}' has {len(act.get('sub_activities', []))} sub-activities")
+            return serialized
         except Exception as e:
             print(f"AdminStrategicInitiativeSerializer - Error getting activities: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     def get_total_measures_weight(self, obj):
