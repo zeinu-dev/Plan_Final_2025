@@ -2678,7 +2678,6 @@ def report_statistics(request):
                 objective_achievements.append({
                     'id': objective.id,
                     'title': objective.title,
-                    'title_amharic': objective.title_amharic,
                     'achievement_percentage': round(avg_percentage, 2),
                     'color': color
                 })
