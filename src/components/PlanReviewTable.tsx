@@ -215,6 +215,11 @@ const PlanReviewTable: React.FC<PlanReviewTableProps> = ({
         const plannerInitiatives = (objective.initiatives || []).filter(initiative => {
           if (!initiative) return false;
 
+          // If plannerOrgId is null, show ALL initiatives (admin view)
+          if (!plannerOrgId) {
+            return true;
+          }
+
           // Only include initiatives that belong to the planner's organization
           // Exclude initiatives with no organization
           const belongsToPlannerOrg = plannerOrgId && initiative.organization &&
@@ -265,6 +270,8 @@ const PlanReviewTable: React.FC<PlanReviewTableProps> = ({
           // Process performance measures and activities for planner's organization
           const performanceMeasures = (initiative.performance_measures || []).filter(measure => {
             if (!measure) return false;
+            // If plannerOrgId is null, show ALL measures (admin view)
+            if (!plannerOrgId) return true;
             const belongsToPlannerOrg = plannerOrgId && measure.organization &&
                                       Number(measure.organization) === Number(plannerOrgId);
             // Only include measures that belong to planner's organization or have no organization
@@ -274,6 +281,8 @@ const PlanReviewTable: React.FC<PlanReviewTableProps> = ({
 
           const mainActivities = (initiative.main_activities || []).filter(activity => {
             if (!activity) return false;
+            // If plannerOrgId is null, show ALL activities (admin view)
+            if (!plannerOrgId) return true;
             const belongsToPlannerOrg = plannerOrgId && activity.organization &&
                                       Number(activity.organization) === Number(plannerOrgId);
             // Only include activities that belong to planner's organization or have no organization

@@ -385,7 +385,7 @@ const AdminPlanSummary: React.FC = () => {
             toDate={plan.to_date || ''}
             planType={plan.type || 'ANNUAL'}
             isViewOnly={true}
-            plannerOrgId={plan.organization}
+            plannerOrgId={null}
           />
         </div>
       </div>
