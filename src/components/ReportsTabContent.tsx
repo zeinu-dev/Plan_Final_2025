@@ -45,21 +45,67 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
 
       console.log('Plan Data Response:', planDataResponse.data);
 
-      // Transform the plan data to match the expected format
+      // Transform the flat plan_data structure to nested objectives structure
       let objectivesData = [];
 
-      if (Array.isArray(planDataResponse.data)) {
-        objectivesData = planDataResponse.data;
-      } else if (planDataResponse.data && typeof planDataResponse.data === 'object') {
-        // If it's an object with objectives property
-        if (Array.isArray(planDataResponse.data.objectives)) {
-          objectivesData = planDataResponse.data.objectives;
-        } else if (planDataResponse.data.strategic_objectives) {
-          objectivesData = planDataResponse.data.strategic_objectives;
-        } else {
-          // If the response is a single object, wrap it in an array
-          objectivesData = [planDataResponse.data];
-        }
+      // The API returns { plan_data: [...], me_data: [...] }
+      const flatPlanData = planDataResponse.data.plan_data || planDataResponse.data;
+
+      if (Array.isArray(flatPlanData)) {
+        // Group initiatives by objective
+        const objectivesMap = new Map();
+
+        flatPlanData.forEach((item: any) => {
+          const objId = item.objective_id;
+
+          if (!objectivesMap.has(objId)) {
+            objectivesMap.set(objId, {
+              id: objId,
+              title: item.objective_title,
+              weight: item.objective_weight || 0,
+              initiatives: []
+            });
+          }
+
+          // Transform the initiative data to match expected format
+          const initiative = {
+            id: item.initiative_id,
+            name: item.initiative_name,
+            weight: item.initiative_weight || 0,
+            performanceMeasures: (item.performance_measures || []).map((pm: any) => ({
+              id: pm.id,
+              name: pm.name,
+              weight: pm.weight || 0,
+              target: pm.target || 0,
+              achievement: pm.achievement || 0,
+              justification: pm.justification || ''
+            })),
+            mainActivities: (item.main_activities || []).map((ma: any) => ({
+              id: ma.id,
+              name: ma.name,
+              weight: ma.weight || 0,
+              target: ma.target || 0,
+              achievement: ma.achievement || 0,
+              justification: ma.justification || '',
+              subActivities: (ma.sub_activities || []).map((sa: any) => ({
+                id: sa.id,
+                name: sa.name,
+                government_treasury: sa.government_treasury || 0,
+                sdg_funding: sa.sdg_funding || 0,
+                partners_funding: sa.partners_funding || 0,
+                other_funding: sa.other_funding || 0,
+                government_treasury_utilized: sa.government_treasury_utilized || 0,
+                sdg_funding_utilized: sa.sdg_funding_utilized || 0,
+                partners_funding_utilized: sa.partners_funding_utilized || 0,
+                other_funding_utilized: sa.other_funding_utilized || 0
+              }))
+            }))
+          };
+
+          objectivesMap.get(objId).initiatives.push(initiative);
+        });
+
+        objectivesData = Array.from(objectivesMap.values());
       }
 
       // Combine the data
