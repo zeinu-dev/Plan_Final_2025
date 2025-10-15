@@ -43,12 +43,32 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
       const reportResponse = await api.get(`/reports/${report.report_id}/`);
       const planDataResponse = await api.get(`/reports/${report.report_id}/plan_data/`);
 
+      console.log('Plan Data Response:', planDataResponse.data);
+
+      // Transform the plan data to match the expected format
+      let objectivesData = [];
+
+      if (Array.isArray(planDataResponse.data)) {
+        objectivesData = planDataResponse.data;
+      } else if (planDataResponse.data && typeof planDataResponse.data === 'object') {
+        // If it's an object with objectives property
+        if (Array.isArray(planDataResponse.data.objectives)) {
+          objectivesData = planDataResponse.data.objectives;
+        } else if (planDataResponse.data.strategic_objectives) {
+          objectivesData = planDataResponse.data.strategic_objectives;
+        } else {
+          // If the response is a single object, wrap it in an array
+          objectivesData = [planDataResponse.data];
+        }
+      }
+
       // Combine the data
       const fullReportData = {
         ...reportResponse.data,
-        planData: planDataResponse.data
+        planData: objectivesData
       };
 
+      console.log('Transformed objectives data:', objectivesData);
       setSelectedReportForView(fullReportData);
     } catch (error) {
       console.error('Failed to load report details:', error);
@@ -599,7 +619,7 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
                   <Loader className="h-8 w-8 animate-spin text-blue-600" />
                   <span className="ml-2 text-gray-600">Loading M&E report data...</span>
                 </div>
-              ) : selectedReportForView && selectedReportForView.planData ? (
+              ) : selectedReportForView && Array.isArray(selectedReportForView.planData) && selectedReportForView.planData.length > 0 ? (
                 <HorizontalMEReportTable
                   objectives={selectedReportForView.planData}
                   organizationName={selectedReportForView.organization_name || ''}
@@ -609,7 +629,10 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
                 />
               ) : (
                 <div className="text-center py-12 text-gray-500">
-                  Failed to load M&E report data. Please try again.
+                  {selectedReportForView ?
+                    'No M&E report data available for this report.' :
+                    'Failed to load M&E report data. Please try again.'
+                  }
                 </div>
               )}
             </div>
