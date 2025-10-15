@@ -1789,6 +1789,20 @@ export const plans = {
   }
 };
 
+// Reports service
+export const reports = {
+  async getStatistics() {
+    try {
+      await ensureCsrfToken();
+      const response = await api.get('/reports/statistics/');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get report statistics:', error);
+      throw error;
+    }
+  }
+};
+
 // Utility export functions
 export const processDataForExport = (objectives: any[], language: string = 'en'): any[] => {
   return []; // Placeholder - implement actual export processing

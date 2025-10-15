@@ -2598,3 +2598,103 @@ class SubActivityBudgetUtilizationViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.exception("Error in bulk create/update budget utilization")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def report_statistics(request):
+    """
+    Get report statistics including:
+    - Organizations that submitted reports vs not submitted
+    - Strategic objective achievement percentages with color coding
+    """
+    try:
+        from django.db.models import Q, Count, Avg, Sum, F, Case, When, DecimalField
+        from decimal import Decimal
+
+        # Get all organizations with approved plans
+        approved_plans = Plan.objects.filter(status='APPROVED')
+        orgs_with_approved_plans = approved_plans.values_list('organization_id', flat=True).distinct()
+
+        # Get organizations that have submitted reports
+        orgs_with_reports = Report.objects.filter(
+            status__in=['SUBMITTED', 'APPROVED']
+        ).values_list('organization_id', flat=True).distinct()
+
+        # Calculate submission stats
+        total_orgs = Organization.objects.filter(id__in=orgs_with_approved_plans).count()
+        submitted_count = len(set(orgs_with_reports))
+        not_submitted_count = total_orgs - submitted_count
+
+        # Get strategic objective achievements
+        # Calculate achievement percentage for each objective across all reports
+        objective_achievements = []
+
+        strategic_objectives = StrategicObjective.objects.all()
+
+        for objective in strategic_objectives:
+            # Get all performance measures under this objective (through initiatives)
+            initiatives = objective.initiatives.all()
+            measure_ids = PerformanceMeasure.objects.filter(
+                initiative__in=initiatives
+            ).values_list('id', flat=True)
+
+            # Get achievements for these measures from submitted/approved reports
+            achievements = PerformanceAchievement.objects.filter(
+                performance_measure_id__in=measure_ids,
+                report__status__in=['SUBMITTED', 'APPROVED']
+            ).select_related('performance_measure')
+
+            if not achievements.exists():
+                continue
+
+            # Calculate achievement percentage for each measure
+            total_percentage = Decimal('0')
+            measure_count = 0
+
+            for achievement in achievements:
+                measure = achievement.performance_measure
+                target = measure.annual_target or 0
+
+                if target > 0:
+                    achievement_percent = (Decimal(str(achievement.achievement)) / Decimal(str(target))) * 100
+                    total_percentage += achievement_percent
+                    measure_count += 1
+
+            if measure_count > 0:
+                avg_percentage = float(total_percentage / measure_count)
+
+                # Determine color based on percentage
+                color = '#F2250A'  # Red (default)
+                if avg_percentage >= 95:
+                    color = '#00A300'  # Dark Green
+                elif avg_percentage >= 80:
+                    color = '#93C572'  # Light Green
+                elif avg_percentage >= 65:
+                    color = '#FFFF00'  # Dark Yellow
+                elif avg_percentage >= 55:
+                    color = '#FFBF00'  # Light Yellow
+
+                objective_achievements.append({
+                    'id': objective.id,
+                    'title': objective.title,
+                    'title_amharic': objective.title_amharic,
+                    'achievement_percentage': round(avg_percentage, 2),
+                    'color': color
+                })
+
+        # Sort by achievement percentage descending
+        objective_achievements.sort(key=lambda x: x['achievement_percentage'], reverse=True)
+
+        return Response({
+            'submission_stats': {
+                'total_organizations': total_orgs,
+                'submitted': submitted_count,
+                'not_submitted': not_submitted_count
+            },
+            'objective_achievements': objective_achievements
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.exception("Error getting report statistics")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
