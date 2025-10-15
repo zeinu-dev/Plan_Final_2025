@@ -183,9 +183,14 @@ const PlanReviewTable: React.FC<PlanReviewTableProps> = ({
   // Process and filter data for the planner's organization
   const processedData = useMemo(() => {
     try {
+      console.log(`PlanReviewTable: processedData useMemo called with plannerOrgId=${plannerOrgId} (type: ${typeof plannerOrgId})`);
+      console.log(`PlanReviewTable: isViewOnly=${isViewOnly}, isPreviewMode=${isPreviewMode}`);
+      console.log(`PlanReviewTable: objectives count=${objectives?.length || 0}`);
+
       setDataProcessingError(null);
 
       if (!objectives || !Array.isArray(objectives)) {
+        console.log('PlanReviewTable: No objectives or not an array');
         return [];
       }
 
@@ -215,8 +220,9 @@ const PlanReviewTable: React.FC<PlanReviewTableProps> = ({
         const plannerInitiatives = (objective.initiatives || []).filter(initiative => {
           if (!initiative) return false;
 
-          // If plannerOrgId is null, show ALL initiatives (admin view)
-          if (!plannerOrgId) {
+          // If plannerOrgId is null or undefined, show ALL initiatives (admin view)
+          if (plannerOrgId === null || plannerOrgId === undefined) {
+            console.log(`Initiative ${initiative.name}: Admin view - showing all`);
             return true;
           }
 
@@ -270,8 +276,8 @@ const PlanReviewTable: React.FC<PlanReviewTableProps> = ({
           // Process performance measures and activities for planner's organization
           const performanceMeasures = (initiative.performance_measures || []).filter(measure => {
             if (!measure) return false;
-            // If plannerOrgId is null, show ALL measures (admin view)
-            if (!plannerOrgId) return true;
+            // If plannerOrgId is null or undefined, show ALL measures (admin view)
+            if (plannerOrgId === null || plannerOrgId === undefined) return true;
             const belongsToPlannerOrg = plannerOrgId && measure.organization &&
                                       Number(measure.organization) === Number(plannerOrgId);
             // Only include measures that belong to planner's organization or have no organization
@@ -281,8 +287,8 @@ const PlanReviewTable: React.FC<PlanReviewTableProps> = ({
 
           const mainActivities = (initiative.main_activities || []).filter(activity => {
             if (!activity) return false;
-            // If plannerOrgId is null, show ALL activities (admin view)
-            if (!plannerOrgId) return true;
+            // If plannerOrgId is null or undefined, show ALL activities (admin view)
+            if (plannerOrgId === null || plannerOrgId === undefined) return true;
             const belongsToPlannerOrg = plannerOrgId && activity.organization &&
                                       Number(activity.organization) === Number(plannerOrgId);
             // Only include activities that belong to planner's organization or have no organization
