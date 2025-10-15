@@ -36,7 +36,10 @@ const AdminPlanSummary: React.FC = () => {
   const plan = planData;
 
   const calculateStatistics = () => {
+    console.log('AdminPlanSummary: calculateStatistics called with plan:', plan);
+
     if (!plan?.objectives) {
+      console.log('AdminPlanSummary: No objectives in plan');
       return {
         objectivesCount: 0,
         initiativesCount: 0,
@@ -52,10 +55,16 @@ const AdminPlanSummary: React.FC = () => {
     let activitiesCount = 0;
     let subActivitiesCount = 0;
 
-    plan.objectives.forEach((objective: any) => {
+    console.log(`AdminPlanSummary: Calculating statistics for ${objectivesCount} objectives`);
+
+    plan.objectives.forEach((objective: any, objIdx: number) => {
+      console.log(`AdminPlanSummary: Objective ${objIdx} (${objective.title}): has ${objective.initiatives?.length || 0} initiatives`);
+
       if (objective.initiatives) {
         initiativesCount += objective.initiatives.length;
-        objective.initiatives.forEach((initiative: any) => {
+        objective.initiatives.forEach((initiative: any, initIdx: number) => {
+          console.log(`AdminPlanSummary:   Initiative ${initIdx} (${initiative.name}): measures=${initiative.performance_measures?.length || 0}, activities=${initiative.main_activities?.length || 0}`);
+
           if (initiative.performance_measures) {
             measuresCount += initiative.performance_measures.length;
           }
@@ -70,6 +79,8 @@ const AdminPlanSummary: React.FC = () => {
         });
       }
     });
+
+    console.log(`AdminPlanSummary: Final statistics - Objectives: ${objectivesCount}, Initiatives: ${initiativesCount}, Measures: ${measuresCount}, Activities: ${activitiesCount}, SubActivities: ${subActivitiesCount}`);
 
     return {
       objectivesCount,
