@@ -2606,7 +2606,9 @@ def report_statistics(request):
     """
     Get report statistics including:
     - Organizations that submitted reports vs not submitted
-    - Strategic objective achievement percentages with color coding
+    - Strategic objective achievement percentages with color coding (grouped by organization)
+    - Organization M&E reports (approved only)
+    - Budget utilization by source
     """
     try:
         from django.db.models import Q, Count, Avg, Sum, F, Case, When, DecimalField
@@ -2626,64 +2628,163 @@ def report_statistics(request):
         submitted_count = len(set(orgs_with_reports))
         not_submitted_count = total_orgs - submitted_count
 
-        # Get strategic objective achievements
-        # Calculate achievement percentage for each objective across all reports
-        objective_achievements = []
+        # Get strategic objective achievements grouped by organization
+        objective_achievements_by_org = []
+        organizations = Organization.objects.filter(id__in=orgs_with_approved_plans)
 
-        strategic_objectives = StrategicObjective.objects.all()
+        for org in organizations:
+            org_reports = Report.objects.filter(
+                organization=org,
+                status__in=['SUBMITTED', 'APPROVED']
+            )
 
-        for objective in strategic_objectives:
-            # Get all performance measures under this objective (through initiatives)
-            initiatives = objective.initiatives.all()
-            measure_ids = PerformanceMeasure.objects.filter(
-                initiative__in=initiatives
-            ).values_list('id', flat=True)
-
-            # Get achievements for these measures from submitted/approved reports
-            achievements = PerformanceAchievement.objects.filter(
-                performance_measure_id__in=measure_ids,
-                report__status__in=['SUBMITTED', 'APPROVED']
-            ).select_related('performance_measure')
-
-            if not achievements.exists():
+            if not org_reports.exists():
                 continue
 
-            # Calculate achievement percentage for each measure
+            strategic_objectives = StrategicObjective.objects.all()
+            org_objectives = []
+
+            for objective in strategic_objectives:
+                # Get all performance measures under this objective (through initiatives)
+                initiatives = objective.initiatives.all()
+                measure_ids = PerformanceMeasure.objects.filter(
+                    initiative__in=initiatives,
+                    organization=org
+                ).values_list('id', flat=True)
+
+                if not measure_ids:
+                    continue
+
+                # Get achievements for these measures from this org's reports
+                achievements = PerformanceAchievement.objects.filter(
+                    performance_measure_id__in=measure_ids,
+                    report__in=org_reports
+                ).select_related('performance_measure')
+
+                if not achievements.exists():
+                    continue
+
+                # Calculate achievement percentage for each measure
+                total_percentage = Decimal('0')
+                measure_count = 0
+
+                for achievement in achievements:
+                    measure = achievement.performance_measure
+                    target = measure.annual_target or 0
+
+                    if target > 0:
+                        achievement_percent = (Decimal(str(achievement.achievement)) / Decimal(str(target))) * 100
+                        total_percentage += achievement_percent
+                        measure_count += 1
+
+                if measure_count > 0:
+                    avg_percentage = float(total_percentage / measure_count)
+
+                    # Determine color based on percentage
+                    color = '#F2250A'  # Red (default)
+                    if avg_percentage >= 95:
+                        color = '#00A300'  # Dark Green
+                    elif avg_percentage >= 80:
+                        color = '#93C572'  # Light Green
+                    elif avg_percentage >= 65:
+                        color = '#FFFF00'  # Dark Yellow
+                    elif avg_percentage >= 55:
+                        color = '#FFBF00'  # Light Yellow
+
+                    org_objectives.append({
+                        'id': objective.id,
+                        'title': objective.title,
+                        'achievement_percentage': round(avg_percentage, 2),
+                        'color': color
+                    })
+
+            if org_objectives:
+                objective_achievements_by_org.append({
+                    'organization_id': org.id,
+                    'organization_name': org.name,
+                    'objectives': org_objectives
+                })
+
+        # Get organization M&E reports (approved only)
+        organization_reports = []
+        approved_reports = Report.objects.filter(
+            status='APPROVED'
+        ).select_related('organization', 'plan').prefetch_related(
+            'performance_achievements__performance_measure',
+            'activity_achievements__main_activity',
+            'budget_utilizations__sub_activity'
+        ).order_by('organization__name', '-report_date')
+
+        for report in approved_reports:
+            # Calculate overall achievement percentage
+            achievements = report.performance_achievements.all()
             total_percentage = Decimal('0')
             measure_count = 0
 
             for achievement in achievements:
                 measure = achievement.performance_measure
                 target = measure.annual_target or 0
-
                 if target > 0:
                     achievement_percent = (Decimal(str(achievement.achievement)) / Decimal(str(target))) * 100
                     total_percentage += achievement_percent
                     measure_count += 1
 
-            if measure_count > 0:
-                avg_percentage = float(total_percentage / measure_count)
+            avg_achievement = float(total_percentage / measure_count) if measure_count > 0 else 0
 
-                # Determine color based on percentage
-                color = '#F2250A'  # Red (default)
-                if avg_percentage >= 95:
-                    color = '#00A300'  # Dark Green
-                elif avg_percentage >= 80:
-                    color = '#93C572'  # Light Green
-                elif avg_percentage >= 65:
-                    color = '#FFFF00'  # Dark Yellow
-                elif avg_percentage >= 55:
-                    color = '#FFBF00'  # Light Yellow
+            # Calculate budget utilization
+            budget_utils = report.budget_utilizations.all()
+            total_govt = sum(float(bu.government_treasury_utilized) for bu in budget_utils)
+            total_sdg = sum(float(bu.sdg_funding_utilized) for bu in budget_utils)
+            total_partners = sum(float(bu.partners_funding_utilized) for bu in budget_utils)
+            total_other = sum(float(bu.other_funding_utilized) for bu in budget_utils)
 
-                objective_achievements.append({
-                    'id': objective.id,
-                    'title': objective.title,
-                    'achievement_percentage': round(avg_percentage, 2),
-                    'color': color
+            organization_reports.append({
+                'report_id': report.id,
+                'organization_id': report.organization.id,
+                'organization_name': report.organization.name,
+                'report_type': report.report_type,
+                'report_date': report.report_date.isoformat(),
+                'status': report.status,
+                'overall_achievement': round(avg_achievement, 2),
+                'budget_utilization': {
+                    'government_treasury': round(total_govt, 2),
+                    'sdg_funding': round(total_sdg, 2),
+                    'partners_funding': round(total_partners, 2),
+                    'other_funding': round(total_other, 2),
+                    'total': round(total_govt + total_sdg + total_partners + total_other, 2)
+                }
+            })
+
+        # Get budget utilization aggregated by organization and source
+        budget_utilization_by_org = []
+        for org in organizations:
+            org_reports = Report.objects.filter(
+                organization=org,
+                status='APPROVED'
+            )
+
+            if not org_reports.exists():
+                continue
+
+            budget_utils = SubActivityBudgetUtilization.objects.filter(
+                report__in=org_reports
+            )
+
+            total_govt = sum(float(bu.government_treasury_utilized) for bu in budget_utils)
+            total_sdg = sum(float(bu.sdg_funding_utilized) for bu in budget_utils)
+            total_partners = sum(float(bu.partners_funding_utilized) for bu in budget_utils)
+            total_other = sum(float(bu.other_funding_utilized) for bu in budget_utils)
+
+            if total_govt + total_sdg + total_partners + total_other > 0:
+                budget_utilization_by_org.append({
+                    'organization_id': org.id,
+                    'organization_name': org.name,
+                    'government_treasury': round(total_govt, 2),
+                    'sdg_funding': round(total_sdg, 2),
+                    'partners_funding': round(total_partners, 2),
+                    'other_funding': round(total_other, 2),
+                    'total': round(total_govt + total_sdg + total_partners + total_other, 2)
                 })
-
-        # Sort by achievement percentage descending
-        objective_achievements.sort(key=lambda x: x['achievement_percentage'], reverse=True)
 
         return Response({
             'submission_stats': {
@@ -2691,7 +2792,9 @@ def report_statistics(request):
                 'submitted': submitted_count,
                 'not_submitted': not_submitted_count
             },
-            'objective_achievements': objective_achievements
+            'objective_achievements_by_org': objective_achievements_by_org,
+            'organization_reports': organization_reports,
+            'budget_utilization_by_org': budget_utilization_by_org
         }, status=status.HTTP_200_OK)
 
     except Exception as e:
