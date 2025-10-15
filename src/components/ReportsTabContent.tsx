@@ -3,6 +3,7 @@ import { Building2, CheckCircle, XCircle, Loader, Eye, DollarSign, TrendingUp } 
 import { useLanguage } from '../lib/i18n/LanguageContext';
 import { reports, api } from '../lib/api';
 import { Bar } from 'react-chartjs-2';
+import { HorizontalMEReportTable } from './HorizontalMEReportTable';
 
 interface ReportsTabContentProps {
   reportSubTab: 'performance-overview' | 'approved-reports' | 'budget-utilization';
@@ -15,6 +16,7 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
   const [selectedOrg, setSelectedOrg] = useState<string>('all');
   const [selectedReportForView, setSelectedReportForView] = useState<any>(null);
   const [showMEModal, setShowMEModal] = useState(false);
+  const [loadingMEReport, setLoadingMEReport] = useState(false);
 
   useEffect(() => {
     loadReportStatistics();
@@ -34,11 +36,25 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
 
   const handleViewMEReport = async (report: any) => {
     try {
-      const response = await api.get(`/reports/${report.report_id}/`);
-      setSelectedReportForView(response.data);
+      setLoadingMEReport(true);
       setShowMEModal(true);
+
+      // Fetch the full report data including plan_data
+      const reportResponse = await api.get(`/reports/${report.report_id}/`);
+      const planDataResponse = await api.get(`/reports/${report.report_id}/plan_data/`);
+
+      // Combine the data
+      const fullReportData = {
+        ...reportResponse.data,
+        planData: planDataResponse.data
+      };
+
+      setSelectedReportForView(fullReportData);
     } catch (error) {
       console.error('Failed to load report details:', error);
+      setShowMEModal(false);
+    } finally {
+      setLoadingMEReport(false);
     }
   };
 
@@ -557,12 +573,13 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
       )}
 
       {/* M&E Report Modal (shown in approved-reports tab) */}
-      {showMEModal && selectedReportForView && (
+      {showMEModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">
-                M&E Report - {selectedReportForView.organization_name} ({selectedReportForView.report_type})
+                M&E Report
+                {selectedReportForView && ` - ${selectedReportForView.organization_name} (${selectedReportForView.report_type})`}
               </h3>
               <button
                 onClick={() => {
@@ -577,12 +594,24 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
-              <div className="text-sm text-gray-700">
-                <p><strong>Organization:</strong> {selectedReportForView.organization_name}</p>
-                <p><strong>Report Type:</strong> {selectedReportForView.report_type}</p>
-                <p><strong>Report Date:</strong> {new Date(selectedReportForView.report_date).toLocaleDateString()}</p>
-                <p className="mt-4 text-gray-600">M&E report details would be displayed here with performance measures and budget utilization data.</p>
-              </div>
+              {loadingMEReport ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader className="h-8 w-8 animate-spin text-blue-600" />
+                  <span className="ml-2 text-gray-600">Loading M&E report data...</span>
+                </div>
+              ) : selectedReportForView && selectedReportForView.planData ? (
+                <HorizontalMEReportTable
+                  objectives={selectedReportForView.planData}
+                  organizationName={selectedReportForView.organization_name || ''}
+                  reportType={selectedReportForView.report_type || ''}
+                  reportDate={selectedReportForView.report_date || ''}
+                  plannerName={selectedReportForView.planner_name || ''}
+                />
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  Failed to load M&E report data. Please try again.
+                </div>
+              )}
             </div>
           </div>
         </div>
