@@ -729,7 +729,7 @@ const PlanSummary: React.FC = () => {
               toDate={plan.to_date || ''}
               planType={plan.type || 'LEO/EO Plan'}
               isViewOnly={true}
-              plannerOrgId={userOrgId}
+              plannerOrgId={isUserAdmin || isUserEvaluator ? null : userOrgId}
             />
           </div>
         </div>
