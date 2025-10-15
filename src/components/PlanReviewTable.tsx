@@ -82,6 +82,8 @@ const PlanReviewTable: React.FC<PlanReviewTableProps> = ({
   plannerOrgId = null,
   isViewOnly = false
 }) => {
+  console.log('[PlanReviewTable MOUNT/RENDER] plannerOrgId prop received:', plannerOrgId, 'type:', typeof plannerOrgId);
+
   const { t } = useLanguage();
   const [organizationsMap, setOrganizationsMap] = useState<Record<string, string>>({});
   const [isProcessing, setIsProcessing] = useState(false);
@@ -219,6 +221,8 @@ const PlanReviewTable: React.FC<PlanReviewTableProps> = ({
         // Filter initiatives by planner organization ID
         const plannerInitiatives = (objective.initiatives || []).filter(initiative => {
           if (!initiative) return false;
+
+          console.log(`[FILTER CHECK] plannerOrgId value: ${plannerOrgId}, type: ${typeof plannerOrgId}, isNull: ${plannerOrgId === null}, isUndefined: ${plannerOrgId === undefined}`);
 
           // If plannerOrgId is null or undefined, show ALL initiatives (admin view)
           if (plannerOrgId === null || plannerOrgId === undefined) {
