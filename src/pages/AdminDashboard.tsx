@@ -1795,7 +1795,7 @@ const AdminDashboard: React.FC = () => {
                                   console.log('View plan details clicked:', plan);
                                   console.log('Plan ID:', plan.id);
                                   if (plan.id) {
-                                    navigate(`/plans/${plan.id}`);
+                                    navigate(`/admin/plans/${plan.id}`);
                                   } else {
                                     console.error('Plan ID is missing:', plan);
                                   }
@@ -2078,7 +2078,7 @@ const AdminDashboard: React.FC = () => {
                                   console.log('View plan clicked:', plan);
                                   console.log('Plan ID:', plan.id);
                                   if (plan.id) {
-                                    navigate(`/plans/${plan.id}`);
+                                    navigate(`/admin/plans/${plan.id}`);
                                   } else {
                                     console.error('Plan ID is missing:', plan);
                                   }
