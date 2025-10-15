@@ -269,7 +269,6 @@ const PlanReviewTable: React.FC<PlanReviewTableProps> = ({
             'Other': '-',
             'TotalAvailable': '-',
             'Gap': '-',
-            'itemData': {},
           });
           objectiveAdded = true;
           return;
@@ -327,7 +326,6 @@ const PlanReviewTable: React.FC<PlanReviewTableProps> = ({
               'Other': '-',
               'TotalAvailable': '-',
               'Gap': '-',
-              'itemData': {},
             });
             objectiveAdded = true;
           } else {
