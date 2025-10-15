@@ -173,62 +173,44 @@ const AdminDashboard: React.FC = () => {
     setupOrganizationHierarchy();
   }, [adminOrgId, isAuthInitialized]);
 
-  // Direct sub-activities data fetch
+  // Direct sub-activities data fetch - OPTIMIZED
   const { data: directSubActivitiesData, isLoading: isLoadingDirectSubActivities } = useQuery({
     queryKey: ['sub-activities', 'direct', allowedOrgIds, adminOrgType],
     queryFn: async () => {
       try {
-        console.log('Fetching sub-activities directly for admin dashboard');
-        
-        // Fetch sub-activities and main activities in parallel for better performance
+        // Only fetch what we need based on organization filter
+        const params: any = {};
+        if (adminOrgType !== 'MINISTER' && allowedOrgIds.length > 0) {
+          params.organization__in = allowedOrgIds.join(',');
+        }
+
+        // Fetch sub-activities and main activities in parallel with filters
         const [subActivitiesResponse, mainActivitiesResponse] = await Promise.all([
-          api.get('/sub-activities/'),
-          api.get('/main-activities/')
+          api.get('/sub-activities/', { params }),
+          api.get('/main-activities/', { params })
         ]);
-        
+
         const allSubActivities = subActivitiesResponse.data?.results || subActivitiesResponse.data || [];
         const allMainActivities = mainActivitiesResponse.data?.results || mainActivitiesResponse.data || [];
-        
-        console.log(`Fetched ${allSubActivities.length} sub-activities and ${allMainActivities.length} main activities`);
-        
+
         // Create main activity to organization mapping for fast lookup
         const mainActivityOrgMap = new Map();
         allMainActivities.forEach((activity: any) => {
           mainActivityOrgMap.set(activity.id, activity.organization);
         });
-        
-        // Filter sub-activities based on admin organization hierarchy
-        let filteredSubActivities = allSubActivities;
-        
-        // CRITICAL: Apply organization filtering for non-Minister admins
-        if (adminOrgType !== 'MINISTER' && allowedOrgIds.length > 0) {
-          // Non-Minister admin: only show sub-activities from allowed organizations
-          filteredSubActivities = allSubActivities.filter((subActivity: any) => {
-            const activityOrg = mainActivityOrgMap.get(subActivity.main_activity);
-            
-            // ONLY include if belongs to allowed organizations (no legacy fallback)
-            return activityOrg && allowedOrgIds.includes(Number(activityOrg));
-          });
-          
-          console.log(`Non-Minister admin: filtered to ${filteredSubActivities.length} sub-activities from hierarchy`);
-        } else {
-          console.log(`Minister admin: showing all ${filteredSubActivities.length} sub-activities`);
-        }
-        
+
         // Enrich sub-activities with organization names
-        const enrichedSubActivities = filteredSubActivities.map((subActivity: any) => {
+        const enrichedSubActivities = allSubActivities.map((subActivity: any) => {
           const activityOrg = mainActivityOrgMap.get(subActivity.main_activity);
           const organizationName = activityOrg ? organizationsMap[activityOrg] || 'Unknown Organization' : 'No Organization';
-          
+
           return {
             ...subActivity,
             organization: activityOrg,
             organizationName
           };
         });
-        
-        console.log(`Enriched ${enrichedSubActivities.length} sub-activities with organization data`);
-        
+
         return { data: enrichedSubActivities };
       } catch (error) {
         console.error('Error fetching direct sub-activities:', error);
@@ -236,8 +218,9 @@ const AdminDashboard: React.FC = () => {
       }
     },
     enabled: isAuthInitialized && (allowedOrgIds.length > 0 || adminOrgType === 'MINISTER'),
-    staleTime: 2 * 60 * 1000,
-    retry: 2
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: 1
   });
 
   // Helper function to calculate plan budget from sub-activities (MOVED UP TO AVOID REFERENCE ERROR)
@@ -255,53 +238,37 @@ const AdminDashboard: React.FC = () => {
     }, 0);
   };
 
-  // Fetch all plans for admin overview
+  // Fetch all plans for admin overview - OPTIMIZED
   const { data: allPlans, isLoading, refetch } = useQuery({
     queryKey: ['plans', 'admin-all', allowedOrgIds],
     queryFn: async () => {
       try {
         const params: any = {};
-        
-        // CRITICAL: Apply organization filtering for non-Minister admins
+
+        // Apply organization filtering at API level
         if (allowedOrgIds.length > 0 && adminOrgType !== 'MINISTER') {
-          // Non-Minister admin: filter by allowed organizations only
           params.organization__in = allowedOrgIds.join(',');
           console.log('Filtering plans by allowed organizations:', allowedOrgIds);
         } else {
           console.log('Minister admin: fetching all plans');
         }
-        
+
         const response = await api.get('/plans/', { params });
-        let plansData = response.data?.results || response.data || [];
-
-        // ADDITIONAL CLIENT-SIDE FILTERING for non-Minister admins
-        if (adminOrgType !== 'MINISTER' && allowedOrgIds.length > 0) {
-          plansData = plansData.filter((plan: any) => 
-            allowedOrgIds.includes(Number(plan.organization))
-          );
-          console.log(`After client-side filtering: ${plansData.length} plans for non-Minister admin`);
-        }
-        // Map organization names to plans
-        plansData = plansData.map((plan: any) => {
-          const organizationName = organizationsMap[plan.organization] ||
-                                  plan.organization_name ||
-                                  'Unknown Organization';
-
-          return {
+        return {
+          data: (response.data?.results || response.data || []).map((plan: any) => ({
             ...plan,
-            organizationName
-          };
-        });
-
-        console.log(`Fetched ${plansData.length} plans for admin dashboard`);
-        return { data: plansData };
+            organizationName: organizationsMap[plan.organization] || plan.organization_name || 'Unknown Organization'
+          }))
+        };
       } catch (error) {
         console.error('Error fetching all plans:', error);
         return { data: [] };
       }
     },
     enabled: isAuthInitialized && (allowedOrgIds.length > 0 || adminOrgType === 'MINISTER'),
-    retry: 2
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: 1
   });
 
   // Helper function to get organization name
@@ -311,22 +278,10 @@ const AdminDashboard: React.FC = () => {
            (plan.organization && organizationsMap[plan.organization]) ||
            'Unknown Organization';
   };
-  // FILTERED: Calculate summary statistics for plans (organization hierarchy applied)
+  // Plans are already filtered by API, no need to re-filter
   const reviewedPlansData = useMemo(() => {
-    const plans = allPlans?.data || [];
-    
-    // CRITICAL: Apply organization filtering for non-Minister admins
-    if (adminOrgType !== 'MINISTER' && allowedOrgIds.length > 0) {
-      const filtered = plans.filter((plan: any) => 
-        allowedOrgIds.includes(Number(plan.organization))
-      );
-      console.log(`Non-Minister admin: filtered to ${filtered.length} plans from ${plans.length} total`);
-      return filtered;
-    }
-    
-    console.log(`Minister admin: showing all ${plans.length} plans`);
-    return plans;
-  }, [allPlans?.data, allowedOrgIds, adminOrgType]);
+    return allPlans?.data || [];
+  }, [allPlans?.data]);
 
 
   // FILTERED: Calculate counts (organization hierarchy applied)
@@ -336,7 +291,6 @@ const AdminDashboard: React.FC = () => {
     let approved = 0;
     let rejected = 0;
 
-    console.log(`Calculating plan counts from ${reviewedPlansData.length} filtered plans`);
     reviewedPlansData.forEach(plan => {
       if (['SUBMITTED', 'APPROVED'].includes(plan.status)) {
         total++;
@@ -346,7 +300,6 @@ const AdminDashboard: React.FC = () => {
       if (plan.status === 'REJECTED') rejected++;
     });
 
-    console.log(`Plan counts - Total: ${total}, Pending: ${pending}, Approved: ${approved}, Rejected: ${rejected}`);
     return {
       totalPlans: total,
       pendingCount: pending,
@@ -360,9 +313,7 @@ const AdminDashboard: React.FC = () => {
     const subActivities = directSubActivitiesData?.data || [];
     const submittedAndApprovedPlans = reviewedPlansData.filter(plan => ['SUBMITTED', 'APPROVED'].includes(plan.status));
     const submittedAndApprovedOrgIds = submittedAndApprovedPlans.map(plan => Number(plan.organization));
-    
-    console.log(`Calculating budget totals from ${subActivities.length} sub-activities for ${submittedAndApprovedPlans.length} SUBMITTED/APPROVED plans`);
-    
+
     if (subActivities.length === 0) {
       return {
         totalBudget: 0,
@@ -732,34 +683,78 @@ const AdminDashboard: React.FC = () => {
     return result;
   }, [directSubActivitiesData?.data, organizationsMap]);
 
-  // Filter and sort pending plans
+  // Cache organization budgets for performance
+  const orgBudgetCache = useMemo(() => {
+    const cache = new Map();
+    const subActivities = directSubActivitiesData?.data || [];
+
+    // Group sub-activities by organization
+    const orgSubActivities = new Map();
+    subActivities.forEach((subActivity: any) => {
+      const orgId = subActivity.organization;
+      if (!orgSubActivities.has(orgId)) {
+        orgSubActivities.set(orgId, []);
+      }
+      orgSubActivities.get(orgId).push(subActivity);
+    });
+
+    // Calculate budget per organization
+    orgSubActivities.forEach((subActivitiesList, orgId) => {
+      const orgPlans = reviewedPlansData.filter(p =>
+        p.organization === orgId && ['SUBMITTED', 'APPROVED'].includes(p.status)
+      );
+      const planWeight = orgPlans.length > 0 ? 1 / orgPlans.length : 1;
+
+      let totalBudget = 0, totalFunding = 0, government = 0, partners = 0, sdg = 0, other = 0;
+
+      subActivitiesList.forEach((subActivity: any) => {
+        const cost = subActivity.budget_calculation_type === 'WITH_TOOL'
+          ? Number(subActivity.estimated_cost_with_tool || 0)
+          : Number(subActivity.estimated_cost_without_tool || 0);
+        const gov = Number(subActivity.government_treasury || 0);
+        const part = Number(subActivity.partners_funding || 0);
+        const sdgFund = Number(subActivity.sdg_funding || 0);
+        const otherFund = Number(subActivity.other_funding || 0);
+
+        totalBudget += cost * planWeight;
+        totalFunding += (gov + part + sdgFund + otherFund) * planWeight;
+        government += gov * planWeight;
+        partners += part * planWeight;
+        sdg += sdgFund * planWeight;
+        other += otherFund * planWeight;
+      });
+
+      cache.set(orgId, {
+        total: totalBudget,
+        totalFunding,
+        government,
+        partners,
+        sdg,
+        other,
+        gap: Math.max(0, totalBudget - totalFunding)
+      });
+    });
+
+    return cache;
+  }, [directSubActivitiesData?.data, reviewedPlansData]);
+
+  // Filter and sort pending plans - OPTIMIZED
   const getFilteredPendingPlans = useMemo(() => {
-    // Start with plans already filtered by organization hierarchy
-    let filtered = reviewedPlansData.filter(plan =>
-      plan.status === 'SUBMITTED'
-    );
+    let filtered = reviewedPlansData.filter(plan => plan.status === 'SUBMITTED');
 
-    console.log(`Starting with ${filtered.length} pending plans from allowed organizations`);
-
-    // Apply organization filter
     if (pendingOrgFilter !== 'all') {
       filtered = filtered.filter(plan => plan.organization === pendingOrgFilter);
-      console.log(`After organization filter (${pendingOrgFilter}): ${filtered.length} plans`);
     }
 
-    // Apply search filter
     if (pendingSearch) {
       filtered = filtered.filter(plan =>
         getOrganizationName(plan).toLowerCase().includes(pendingSearch.toLowerCase()) ||
         (plan.planner_name && plan.planner_name.toLowerCase().includes(pendingSearch.toLowerCase()))
       );
-      console.log(`After search filter (${pendingSearch}): ${filtered.length} plans`);
     }
 
-    // Apply sorting
     filtered.sort((a, b) => {
       let aValue: any, bValue: any;
-
       switch (pendingSortBy) {
         case 'date':
           aValue = new Date(a.submitted_at || a.created_at).getTime();
@@ -776,79 +771,17 @@ const AdminDashboard: React.FC = () => {
         default:
           return 0;
       }
+      return pendingSortOrder === 'asc' ? (aValue > bValue ? 1 : -1) : (aValue < bValue ? 1 : -1);
+    });
 
-      if (pendingSortOrder === 'asc') {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
+    // Use cached budgets instead of recalculating
+    return filtered.map((plan: any) => ({
+      ...plan,
+      budget: orgBudgetCache.get(plan.organization) || {
+        total: 0, totalFunding: 0, government: 0, partners: 0, sdg: 0, other: 0, gap: 0
       }
-    });
-
-    // Add REAL budget calculation for filtered plans from sub-activities
-    const enrichedFiltered = filtered.map((plan: any) => {
-      // Get PLAN-SPECIFIC sub-activities by finding main activities that belong to this plan
-      const planSubActivities = (directSubActivitiesData?.data || []).filter((subActivity: any) => {
-        // This is a simplified approach - in a real scenario, you'd need to link sub-activities to specific plans
-        // For now, we'll use organization-based filtering which gives representative budget data
-        return subActivity.organization === plan.organization;
-      });
-      
-      console.log(`Plan ${plan.id} (${getOrganizationName(plan)}): found ${planSubActivities.length} sub-activities`);
-      
-      let totalBudget = 0;
-      let totalFunding = 0;
-      let government = 0;
-      let partners = 0;
-      let sdg = 0;
-      let other = 0;
-      
-      // Calculate proportional budget for this plan (divide org budget by number of org plans)
-      const orgPlans = reviewedPlansData.filter(p => 
-        p.organization === plan.organization && ['SUBMITTED', 'APPROVED'].includes(p.status)
-      );
-      
-      const planWeight = orgPlans.length > 0 ? 1 / orgPlans.length : 1;
-      
-      planSubActivities.forEach((subActivity: any) => {
-        const cost = subActivity.budget_calculation_type === 'WITH_TOOL'
-          ? Number(subActivity.estimated_cost_with_tool || 0)
-          : Number(subActivity.estimated_cost_without_tool || 0);
-        
-        const gov = Number(subActivity.government_treasury || 0);
-        const part = Number(subActivity.partners_funding || 0);
-        const sdgFund = Number(subActivity.sdg_funding || 0);
-        const otherFund = Number(subActivity.other_funding || 0);
-        const funding = gov + part + sdgFund + otherFund;
-        
-        // Apply proportional weight to avoid double-counting when multiple plans per organization
-        totalBudget += cost * planWeight;
-        totalFunding += funding * planWeight;
-        government += gov * planWeight;
-        partners += part * planWeight;
-        sdg += sdgFund * planWeight;
-        other += otherFund * planWeight;
-      });
-      
-      const gap = Math.max(0, totalBudget - totalFunding);
-      
-      console.log(`Plan ${plan.id} budget: total=${totalBudget}, funding=${totalFunding}, gap=${gap}`);
-      
-      return {
-        ...plan,
-        budget: {
-          total: totalBudget,
-          totalFunding,
-          government,
-          partners,
-          sdg,
-          other,
-          gap
-        }
-      };
-    });
-    
-    return enrichedFiltered;
-  }, [reviewedPlansData, pendingOrgFilter, pendingSearch, pendingSortBy, pendingSortOrder, directSubActivitiesData?.data]);
+    }));
+  }, [reviewedPlansData, pendingOrgFilter, pendingSearch, pendingSortBy, pendingSortOrder, orgBudgetCache]);
 
   const filteredPendingPlans = getFilteredPendingPlans;
 
@@ -860,39 +793,27 @@ const AdminDashboard: React.FC = () => {
     pendingStartIndex + pendingItemsPerPage
   );
 
-  // Filter and sort reviewed plans
+  // Filter and sort reviewed plans - OPTIMIZED
   const getFilteredReviewedPlans = useMemo(() => {
-    // Start with plans already filtered by organization hierarchy
-    let filtered = reviewedPlansData.filter(plan =>
-      ['APPROVED', 'REJECTED'].includes(plan.status)
-    );
+    let filtered = reviewedPlansData.filter(plan => ['APPROVED', 'REJECTED'].includes(plan.status));
 
-    console.log(`Starting with ${filtered.length} approved/rejected plans from allowed organizations`);
-    // Apply status filter
     if (reviewedFilter !== 'all') {
       filtered = filtered.filter(plan => plan.status === reviewedFilter);
-      console.log(`After status filter (${reviewedFilter}): ${filtered.length} plans`);
     }
 
-    // Apply organization filter
     if (reviewedOrgFilter !== 'all') {
       filtered = filtered.filter(plan => plan.organization === reviewedOrgFilter);
-      console.log(`After organization filter (${reviewedOrgFilter}): ${filtered.length} plans`);
     }
 
-    // Apply search filter
     if (reviewedSearch) {
       filtered = filtered.filter(plan =>
         getOrganizationName(plan).toLowerCase().includes(reviewedSearch.toLowerCase()) ||
         (plan.planner_name && plan.planner_name.toLowerCase().includes(reviewedSearch.toLowerCase()))
       );
-      console.log(`After search filter (${reviewedSearch}): ${filtered.length} plans`);
     }
 
-    // Apply sorting
     filtered.sort((a, b) => {
       let aValue: any, bValue: any;
-
       switch (reviewedSortBy) {
         case 'date':
           aValue = new Date(a.submitted_at || a.created_at).getTime();
@@ -909,79 +830,17 @@ const AdminDashboard: React.FC = () => {
         default:
           return 0;
       }
+      return reviewedSortOrder === 'asc' ? (aValue > bValue ? 1 : -1) : (aValue < bValue ? 1 : -1);
+    });
 
-      if (reviewedSortOrder === 'asc') {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
+    // Use cached budgets instead of recalculating
+    return filtered.map((plan: any) => ({
+      ...plan,
+      budget: orgBudgetCache.get(plan.organization) || {
+        total: 0, totalFunding: 0, government: 0, partners: 0, sdg: 0, other: 0, gap: 0
       }
-    });
-
-    // Add REAL budget calculation for filtered plans from sub-activities
-    const enrichedFiltered = filtered.map((plan: any) => {
-      // Get PLAN-SPECIFIC sub-activities by finding main activities that belong to this plan
-      const planSubActivities = (directSubActivitiesData?.data || []).filter((subActivity: any) => {
-        // This is a simplified approach - in a real scenario, you'd need to link sub-activities to specific plans
-        // For now, we'll use organization-based filtering which gives representative budget data
-        return subActivity.organization === plan.organization;
-      });
-      
-      console.log(`Plan ${plan.id} (${getOrganizationName(plan)}): found ${planSubActivities.length} sub-activities`);
-      
-      let totalBudget = 0;
-      let totalFunding = 0;
-      let government = 0;
-      let partners = 0;
-      let sdg = 0;
-      let other = 0;
-      
-      // Calculate proportional budget for this plan (divide org budget by number of org plans)
-      const orgPlans = reviewedPlansData.filter(p => 
-        p.organization === plan.organization && ['SUBMITTED', 'APPROVED'].includes(p.status)
-      );
-      
-      const planWeight = orgPlans.length > 0 ? 1 / orgPlans.length : 1;
-      
-      planSubActivities.forEach((subActivity: any) => {
-        const cost = subActivity.budget_calculation_type === 'WITH_TOOL'
-          ? Number(subActivity.estimated_cost_with_tool || 0)
-          : Number(subActivity.estimated_cost_without_tool || 0);
-        
-        const gov = Number(subActivity.government_treasury || 0);
-        const part = Number(subActivity.partners_funding || 0);
-        const sdgFund = Number(subActivity.sdg_funding || 0);
-        const otherFund = Number(subActivity.other_funding || 0);
-        const funding = gov + part + sdgFund + otherFund;
-        
-        // Apply proportional weight to avoid double-counting when multiple plans per organization
-        totalBudget += cost * planWeight;
-        totalFunding += funding * planWeight;
-        government += gov * planWeight;
-        partners += part * planWeight;
-        sdg += sdgFund * planWeight;
-        other += otherFund * planWeight;
-      });
-      
-      const gap = Math.max(0, totalBudget - totalFunding);
-      
-      console.log(`Plan ${plan.id} budget: total=${totalBudget}, funding=${totalFunding}, gap=${gap}`);
-      
-      return {
-        ...plan,
-        budget: {
-          total: totalBudget,
-          totalFunding,
-          government,
-          partners,
-          sdg,
-          other,
-          gap
-        }
-      };
-    });
-    
-    return enrichedFiltered;
-  }, [reviewedPlansData, reviewedFilter, reviewedOrgFilter, reviewedSearch, reviewedSortBy, reviewedSortOrder, directSubActivitiesData?.data]);
+    }));
+  }, [reviewedPlansData, reviewedFilter, reviewedOrgFilter, reviewedSearch, reviewedSortBy, reviewedSortOrder, orgBudgetCache]);
 
   const filteredReviewedPlans = getFilteredReviewedPlans;
 
