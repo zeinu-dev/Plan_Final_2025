@@ -50,17 +50,19 @@ router.register(r'budget-utilizations', SubActivityBudgetUtilizationViewSet)
 def csrf_token_view(request):
     return JsonResponse({'detail': 'CSRF cookie set'})
 urlpatterns = [
-    path('', include(router.urls)),
-   path('auth/login/', login_view, name='login'),
+    # Report statistics endpoint (must come before router to avoid conflicts)
+    path('reports/statistics/', report_statistics, name='report-statistics'),
+    # Add custom budget update endpoint
+    path('main-activities/<str:pk>/budget/', MainActivityViewSet.as_view({'post': 'update_budget'}), name='sub-activities-update'),
+    # Auth endpoints
+    path('auth/login/', login_view, name='login'),
     path('auth/logout/', logout_view, name='logout'),
     path('auth/check/', check_auth, name='check_auth'),
     path('auth/csrf/', csrf_token_view, name='csrf_token'),
     path('auth/profile/', csrf_protect(update_profile), name='update_profile'),
     path('auth/password_change/', csrf_protect(password_change), name='password_change'),
-    # Report statistics endpoint
-    path('reports/statistics/', report_statistics, name='report-statistics'),
-    # Add custom budget update endpoint
-    path('main-activities/<str:pk>/budget/', MainActivityViewSet.as_view({'post': 'update_budget'}), name='sub-activities-update'),
+    # Router URLs (must come after custom paths)
+    path('', include(router.urls)),
     # Bulk import endpoints
     # path('sub-activities/bulk_import/', SubActivityViewSet.as_view({'post': 'bulk_import'}), name='subactivity-bulk-import'),
     # path('sub-activities/export_template/', SubActivityViewSet.as_view({'get': 'export_template'}), name='subactivity-export-template'),
