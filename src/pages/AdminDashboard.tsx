@@ -46,7 +46,16 @@ const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'pending' | 'reviewed' | 'budget-activity' | 'analytics' | 'executive-performance' | 'reports'>('overview');
+
+  // Main tabs
+  const [mainTab, setMainTab] = useState<'plans' | 'reports'>('plans');
+
+  // Plan sub-tabs
+  const [planSubTab, setPlansSubTab] = useState<'overview' | 'pending' | 'reviewed' | 'budget-activity' | 'analytics' | 'executive-performance'>('overview');
+
+  // Report sub-tabs
+  const [reportSubTab, setReportSubTab] = useState<'performance-overview' | 'approved-reports' | 'budget-utilization'>('performance-overview');
+
   const [reviewedFilter, setReviewedFilter] = useState('all');
   const [reviewedOrgFilter, setReviewedOrgFilter] = useState('all');
   const [reviewedSearch, setReviewedSearch] = useState('');
@@ -1103,84 +1112,24 @@ const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Tab Navigation */}
+      {/* Main Tab Navigation */}
       <div className="mb-6">
         <div className="border-b border-gray-200">
           <nav className="flex -mb-px space-x-8">
             <button
-              onClick={() => setActiveTab('overview')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'overview'
+              onClick={() => setMainTab('plans')}
+              className={`py-4 px-1 border-b-2 font-semibold text-base ${
+                mainTab === 'plans'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Overview
+              Plans
             </button>
             <button
-              onClick={() => setActiveTab('pending')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'pending'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Pending Reviews
-              {pendingCount > 0 && (
-                <span className="ml-2 bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-xs">
-                  {pendingCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('reviewed')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'reviewed'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Reviewed Plans
-              {(approvedCount + rejectedCount) > 0 && (
-                <span className="ml-2 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs">
-                  {approvedCount + rejectedCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('budget-activity')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'budget-activity'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Budget by Activity
-            </button>
-            <button
-              onClick={() => setActiveTab('analytics')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'analytics'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Analytics
-            </button>
-            <button
-              onClick={() => setActiveTab('executive-performance')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'executive-performance'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Executive Performance
-            </button>
-            <button
-              onClick={() => setActiveTab('reports')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'reports'
+              onClick={() => setMainTab('reports')}
+              className={`py-4 px-1 border-b-2 font-semibold text-base ${
+                mainTab === 'reports'
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
@@ -1191,9 +1140,132 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Overview Tab */}
-      {activeTab === 'overview' && (
-        <div className="space-y-8">
+      {/* Plan Sub-Tabs */}
+      {mainTab === 'plans' && (
+        <div className="mb-6">
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px space-x-6 overflow-x-auto">
+              <button
+                onClick={() => setPlansSubTab('overview')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  planSubTab === 'overview'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Overview
+              </button>
+              <button
+                onClick={() => setPlansSubTab('pending')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  planSubTab === 'pending'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Pending Reviews
+                {pendingCount > 0 && (
+                  <span className="ml-2 bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-xs">
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setPlansSubTab('reviewed')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  planSubTab === 'reviewed'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Reviewed Plans
+                {(approvedCount + rejectedCount) > 0 && (
+                  <span className="ml-2 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs">
+                    {approvedCount + rejectedCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setPlansSubTab('budget-activity')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  planSubTab === 'budget-activity'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Budget by Activity
+              </button>
+              <button
+                onClick={() => setPlansSubTab('analytics')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  planSubTab === 'analytics'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Analytics
+              </button>
+              <button
+                onClick={() => setPlansSubTab('executive-performance')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  planSubTab === 'executive-performance'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Executive Performance
+              </button>
+            </nav>
+          </div>
+        </div>
+      )}
+
+      {/* Report Sub-Tabs */}
+      {mainTab === 'reports' && (
+        <div className="mb-6">
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px space-x-6">
+              <button
+                onClick={() => setReportSubTab('performance-overview')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  reportSubTab === 'performance-overview'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Organization Performance Overview
+              </button>
+              <button
+                onClick={() => setReportSubTab('approved-reports')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  reportSubTab === 'approved-reports'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Approved M&E Reports
+              </button>
+              <button
+                onClick={() => setReportSubTab('budget-utilization')}
+                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  reportSubTab === 'budget-utilization'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Budget Utilization by Source
+              </button>
+            </nav>
+          </div>
+        </div>
+      )}
+
+      {/* Plan Content */}
+      {mainTab === 'plans' && (
+        <>
+          {/* Overview Tab */}
+          {planSubTab === 'overview' && (
+            <div className="space-y-8">
           {/* Top Statistics Cards - Plan Status */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
@@ -1501,7 +1573,7 @@ const AdminDashboard: React.FC = () => {
       )}
 
       {/* Pending Reviews Tab */}
-      {activeTab === 'pending' && (
+          {planSubTab === 'pending' && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0">
@@ -1806,7 +1878,7 @@ const AdminDashboard: React.FC = () => {
       )}
 
       {/* Reviewed Plans Tab */}
-      {activeTab === 'reviewed' && (
+          {planSubTab === 'reviewed' && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0">
@@ -2081,7 +2153,7 @@ const AdminDashboard: React.FC = () => {
       )}
 
       {/* Budget by Activity Tab */}
-      {activeTab === 'budget-activity' && (
+          {planSubTab === 'budget-activity' && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-6">
             <div className="flex justify-between items-center mb-6">
@@ -2264,7 +2336,7 @@ const AdminDashboard: React.FC = () => {
       )}
 
       {/* Analytics Tab */}
-      {activeTab === 'analytics' && (
+          {planSubTab === 'analytics' && (
         <div className="space-y-8">
           {/* Complete Budget Overview by Executives */}
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -2431,7 +2503,7 @@ const AdminDashboard: React.FC = () => {
       )}
 
       {/* Executive Performance Tab */}
-      {activeTab === 'executive-performance' && (
+          {planSubTab === 'executive-performance' && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-6">
             <div className="flex justify-between items-center mb-6">
@@ -2610,8 +2682,12 @@ const AdminDashboard: React.FC = () => {
       )}
 
       {/* Reports Tab */}
-      {activeTab === 'reports' && (
-        <ReportsTabContent />
+        </>
+      )}
+
+      {/* Report Content */}
+      {mainTab === 'reports' && (
+        <ReportsTabContent reportSubTab={reportSubTab} />
       )}
     </div>
   );

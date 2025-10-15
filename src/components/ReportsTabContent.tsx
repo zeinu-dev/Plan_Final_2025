@@ -4,7 +4,11 @@ import { useLanguage } from '../lib/i18n/LanguageContext';
 import { reports, api } from '../lib/api';
 import { Bar } from 'react-chartjs-2';
 
-const ReportsTabContent: React.FC = () => {
+interface ReportsTabContentProps {
+  reportSubTab: 'performance-overview' | 'approved-reports' | 'budget-utilization';
+}
+
+const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) => {
   const { t } = useLanguage();
   const [reportStats, setReportStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -195,7 +199,7 @@ const ReportsTabContent: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      {/* Report Submission Statistics */}
+      {/* Common: Report Submission Statistics (shown in all tabs) */}
       <div>
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Report Submission Status</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -263,8 +267,11 @@ const ReportsTabContent: React.FC = () => {
         </div>
       )}
 
-      {/* Strategic Objective Performance by Organization */}
-      <div>
+      {/* Performance Overview Tab Content */}
+      {reportSubTab === 'performance-overview' && (
+        <>
+          {/* Strategic Objective Performance by Organization */}
+          <div>
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Strategic Objective Performance by Organization</h2>
         {filteredObjectives.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
@@ -369,21 +376,26 @@ const ReportsTabContent: React.FC = () => {
         </div>
       </div>
 
-      {/* Performance Bar Chart */}
-      {performanceChartLabels.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-            <TrendingUp className="h-6 w-6 mr-2 text-blue-600" />
-            Organization Performance Overview
-          </h2>
-          <div style={{ height: `${Math.max(400, performanceChartLabels.length * 40)}px` }}>
-            <Bar data={performanceChartData} options={performanceChartOptions} />
-          </div>
-        </div>
+          {/* Performance Bar Chart */}
+          {performanceChartLabels.length > 0 && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                <TrendingUp className="h-6 w-6 mr-2 text-blue-600" />
+                Organization Performance Overview
+              </h2>
+              <div style={{ height: `${Math.max(400, performanceChartLabels.length * 40)}px` }}>
+                <Bar data={performanceChartData} options={performanceChartOptions} />
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Organization M&E Reports Table */}
-      <div>
+      {/* Approved M&E Reports Tab Content */}
+      {reportSubTab === 'approved-reports' && (
+        <>
+          {/* Organization M&E Reports Table */}
+          <div>
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Approved M&E Reports</h2>
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
@@ -467,9 +479,14 @@ const ReportsTabContent: React.FC = () => {
         </div>
       </div>
 
-      {/* Budget Utilization by Source */}
-      {filteredBudgetUtil.length > 0 && (
-        <div>
+        </>
+      )}
+
+      {/* Budget Utilization Tab Content */}
+      {reportSubTab === 'budget-utilization' && filteredBudgetUtil.length > 0 && (
+        <>
+          {/* Budget Utilization by Source */}
+          <div>
           <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
             <DollarSign className="h-6 w-6 mr-2 text-green-600" />
             Budget Utilization by Source
@@ -536,9 +553,10 @@ const ReportsTabContent: React.FC = () => {
             </div>
           </div>
         </div>
+        </>
       )}
 
-      {/* M&E Report Modal */}
+      {/* M&E Report Modal (shown in approved-reports tab) */}
       {showMEModal && selectedReportForView && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
