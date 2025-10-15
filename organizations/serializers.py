@@ -80,9 +80,28 @@ class StrategicObjectiveSerializer(serializers.ModelSerializer):
         """
         try:
             initiatives = obj.initiatives.all()
-            return StrategicInitiativeSerializer(initiatives, many=True, context=self.context).data
+            print(f"StrategicObjectiveSerializer.get_initiatives for objective '{obj.title}' (ID: {obj.id}): Found {initiatives.count()} initiatives")
+
+            # Check if user is admin
+            request = self.context.get('request')
+            is_admin = False
+            if request and hasattr(request, 'user') and request.user.is_authenticated:
+                from .models import OrganizationUser
+                user_roles = OrganizationUser.objects.filter(user=request.user).values_list('role', flat=True)
+                is_admin = 'ADMIN' in user_roles
+                print(f"  User: {request.user.username}, Is Admin: {is_admin}, Roles: {list(user_roles)}")
+
+            serialized = StrategicInitiativeSerializer(initiatives, many=True, context=self.context).data
+            print(f"  Serialized {len(serialized)} initiatives")
+
+            for init in serialized:
+                print(f"    - Initiative: {init.get('name')} (Org: {init.get('organization')}, Measures: {len(init.get('performance_measures', []))}, Activities: {len(init.get('main_activities', []))})")
+
+            return serialized
         except Exception as e:
             print(f"Error getting initiatives for objective {obj.id}: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     def get_total_initiatives_weight(self, obj):
@@ -142,7 +161,10 @@ class StrategicInitiativeSerializer(serializers.ModelSerializer):
     def get_performance_measures(self, obj):
         try:
             measures = obj.performance_measures.all()
-            return PerformanceMeasureSerializer(measures, many=True).data
+            print(f"    StrategicInitiativeSerializer.get_performance_measures for '{obj.name}': Found {measures.count()} measures")
+            serialized = PerformanceMeasureSerializer(measures, many=True).data
+            print(f"      Serialized {len(serialized)} measures")
+            return serialized
         except Exception as e:
             print(f"Error getting performance measures for initiative {obj.id}: {e}")
             return []
@@ -150,7 +172,10 @@ class StrategicInitiativeSerializer(serializers.ModelSerializer):
     def get_main_activities(self, obj):
         try:
             activities = obj.main_activities.all()
-            return MainActivitySerializer(activities, many=True, context=self.context).data
+            print(f"    StrategicInitiativeSerializer.get_main_activities for '{obj.name}': Found {activities.count()} activities")
+            serialized = MainActivitySerializer(activities, many=True, context=self.context).data
+            print(f"      Serialized {len(serialized)} activities")
+            return serialized
         except Exception as e:
             print(f"Error getting main activities for initiative {obj.id}: {e}")
             return []
