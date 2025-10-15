@@ -45,14 +45,17 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
 
       console.log('Plan Data Response:', planDataResponse.data);
 
-      // Transform the flat plan_data structure to nested objectives structure
+      // The API returns { plan_data: [...], me_data: [...] }
+      // me_data contains the achievement data in the correct nested format
+      // plan_data is just the structure without achievements
       let objectivesData = [];
 
-      // The API returns { plan_data: [...], me_data: [...] }
-      const flatPlanData = planDataResponse.data.plan_data || planDataResponse.data;
-
-      if (Array.isArray(flatPlanData)) {
-        // Group initiatives by objective
+      if (planDataResponse.data.me_data && Array.isArray(planDataResponse.data.me_data)) {
+        // me_data is already in the correct nested format with achievements
+        objectivesData = planDataResponse.data.me_data;
+      } else if (Array.isArray(planDataResponse.data.plan_data)) {
+        // Fallback: transform flat plan_data if me_data is not available
+        const flatPlanData = planDataResponse.data.plan_data;
         const objectivesMap = new Map();
 
         flatPlanData.forEach((item: any) => {
@@ -67,7 +70,6 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
             });
           }
 
-          // Transform the initiative data to match expected format
           const initiative = {
             id: item.initiative_id,
             name: item.initiative_name,
