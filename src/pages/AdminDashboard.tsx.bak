@@ -232,7 +232,9 @@ const AdminDashboard: React.FC = () => {
         if (allowedOrgIds.length > 0 && adminOrgType !== 'MINISTER') {
           // Non-Minister admin: filter by allowed organizations only
           params.organization__in = allowedOrgIds.join(',');
+          console.log('Filtering plans by allowed organizations:', allowedOrgIds);
         } else {
+          console.log('Minister admin: fetching all plans');
         }
 
         const response = await api.get('/plans/', { params });
@@ -295,6 +297,7 @@ const AdminDashboard: React.FC = () => {
     const submittedAndApprovedPlans = reviewedPlansData.filter(plan => ['SUBMITTED', 'APPROVED'].includes(plan.status));
     const submittedAndApprovedOrgIds = submittedAndApprovedPlans.map(plan => Number(plan.organization));
 
+    console.log(`Calculating budget totals from ${subActivities.length} sub-activities for ${submittedAndApprovedPlans.length} SUBMITTED/APPROVED plans`);
 
     if (subActivities.length === 0) {
       return {
@@ -341,6 +344,14 @@ const AdminDashboard: React.FC = () => {
 
     const fundingGap = Math.max(0, totalBudget - totalFunding);
 
+    console.log('Budget totals calculated:', {
+      totalBudget,
+      totalFunding,
+      fundingGap,
+      subActivitiesCount: subActivities.length,
+      submittedApprovedPlans: submittedAndApprovedPlans.length
+    });
+
     return {
       totalBudget,
       totalFunding,
@@ -358,6 +369,7 @@ const AdminDashboard: React.FC = () => {
     const submittedAndApprovedPlans = reviewedPlansData.filter(plan => ['SUBMITTED', 'APPROVED'].includes(plan.status));
     const submittedAndApprovedOrgIds = submittedAndApprovedPlans.map(plan => Number(plan.organization));
 
+    console.log(`Calculating activity type budgets from ${subActivities.length} sub-activities for ${submittedAndApprovedPlans.length} SUBMITTED/APPROVED plans`);
 
     const activityBudgets = {
       Training: { count: 0, budget: 0 },
@@ -386,10 +398,12 @@ const AdminDashboard: React.FC = () => {
           ? Number(subActivity.estimated_cost_with_tool || 0)
           : Number(subActivity.estimated_cost_without_tool || 0);
 
+        console.log(`Sub-activity ${subActivity.name}: type=${activityType}, cost=${cost}, org=${subActivity.organizationName}`);
         activityBudgets[key].budget += cost;
       }
     });
 
+    console.log('Final activity type budgets (SUBMITTED/APPROVED only):', activityBudgets);
     return activityBudgets;
   }, [directSubActivitiesData?.data, reviewedPlansData]);
 
@@ -428,6 +442,7 @@ const AdminDashboard: React.FC = () => {
   const orgPerformance = useMemo(() => {
     const submittedAndApprovedPlans = reviewedPlansData.filter(plan => ['SUBMITTED', 'APPROVED'].includes(plan.status));
 
+    console.log(`Calculating org performance from ${submittedAndApprovedPlans.length} filtered submitted/approved plans`);
     const orgData: Record<string, { plans: number; budget: number; name: string }> = {};
 
     submittedAndApprovedPlans.forEach((plan: any) => {
@@ -456,6 +471,7 @@ const AdminDashboard: React.FC = () => {
       .sort((a, b) => b.plans - a.plans)
       .slice(0, 10);
 
+    console.log(`Org performance calculated for ${sortedOrgs.length} organizations`);
     return {
       labels: sortedOrgs.map(org => org.name),
       plans: sortedOrgs.map(org => org.plans),
@@ -467,6 +483,7 @@ const AdminDashboard: React.FC = () => {
   const budgetByActivityData = useMemo(() => {
     const subActivities = directSubActivitiesData?.data || [];
 
+    console.log(`Calculating budget by activity data from ${subActivities.length} sub-activities`);
 
     const orgActivityData: Record<string, {
       organizationName: string;
@@ -510,13 +527,16 @@ const AdminDashboard: React.FC = () => {
           ? Number(subActivity.estimated_cost_with_tool || 0)
           : Number(subActivity.estimated_cost_without_tool || 0);
 
+        console.log(`Sub-activity ${subActivity.name}: type=${activityType}, cost=${cost} for org ${orgName}`);
         orgActivityData[orgId][key].budget += cost;
         orgActivityData[orgId].totalBudget += cost;
       }
     });
 
     const result = Object.values(orgActivityData);
+    console.log(`Final budget by activity data:`, result.length, 'organizations');
     result.forEach(org => {
+      console.log(`${org.organizationName}: ${org.totalCount} activities, ETB ${org.totalBudget.toLocaleString()} budget`);
     });
 
     return result;
@@ -526,6 +546,7 @@ const AdminDashboard: React.FC = () => {
   const executivePerformanceData = useMemo(() => {
     const submittedAndApprovedPlans = reviewedPlansData.filter(plan => ['SUBMITTED', 'APPROVED'].includes(plan.status));
 
+    console.log(`Calculating executive performance from ${submittedAndApprovedPlans.length} filtered plans`);
     const executiveData: Record<string, {
       organizationName: string;
       totalPlans: number;
@@ -599,6 +620,7 @@ const AdminDashboard: React.FC = () => {
     });
 
     const result = Object.values(executiveData);
+    console.log(`Executive performance calculated for ${result.length} organizations in hierarchy`);
 
     return result;
   }, [reviewedPlansData, directSubActivitiesData?.data]);
@@ -606,6 +628,7 @@ const AdminDashboard: React.FC = () => {
   // Calculate complete budget overview for analytics
   const completeBudgetOverview = useMemo(() => {
     const subActivities = directSubActivitiesData?.data || [];
+    console.log(`Calculating complete budget overview from ${subActivities.length} sub-activities`);
 
     const orgBudgetData: Record<string, {
       organizationName: string;
@@ -640,6 +663,7 @@ const AdminDashboard: React.FC = () => {
     });
 
     const result = Object.values(orgBudgetData).sort((a, b) => b.totalBudget - a.totalBudget);
+    console.log('Complete budget overview:', result.length, 'organizations');
 
     return result;
   }, [directSubActivitiesData?.data, organizationsMap]);
@@ -651,10 +675,12 @@ const AdminDashboard: React.FC = () => {
       plan.status === 'SUBMITTED'
     );
 
+    console.log(`Starting with ${filtered.length} pending plans from allowed organizations`);
 
     // Apply organization filter
     if (pendingOrgFilter !== 'all') {
       filtered = filtered.filter(plan => plan.organization === pendingOrgFilter);
+      console.log(`After organization filter (${pendingOrgFilter}): ${filtered.length} plans`);
     }
 
     // Apply search filter
@@ -663,6 +689,7 @@ const AdminDashboard: React.FC = () => {
         getOrganizationName(plan).toLowerCase().includes(pendingSearch.toLowerCase()) ||
         (plan.planner_name && plan.planner_name.toLowerCase().includes(pendingSearch.toLowerCase()))
       );
+      console.log(`After search filter (${pendingSearch}): ${filtered.length} plans`);
     }
 
     // Apply sorting
@@ -702,6 +729,7 @@ const AdminDashboard: React.FC = () => {
         return subActivity.organization === plan.organization;
       });
 
+      console.log(`Plan ${plan.id} (${getOrganizationName(plan)}): found ${planSubActivities.length} sub-activities`);
 
       let totalBudget = 0;
       let totalFunding = 0;
@@ -739,6 +767,7 @@ const AdminDashboard: React.FC = () => {
 
       const gap = Math.max(0, totalBudget - totalFunding);
 
+      console.log(`Plan ${plan.id} budget: total=${totalBudget}, funding=${totalFunding}, gap=${gap}`);
 
       return {
         ...plan,
@@ -774,14 +803,17 @@ const AdminDashboard: React.FC = () => {
       ['APPROVED', 'REJECTED'].includes(plan.status)
     );
 
+    console.log(`Starting with ${filtered.length} approved/rejected plans from allowed organizations`);
     // Apply status filter
     if (reviewedFilter !== 'all') {
       filtered = filtered.filter(plan => plan.status === reviewedFilter);
+      console.log(`After status filter (${reviewedFilter}): ${filtered.length} plans`);
     }
 
     // Apply organization filter
     if (reviewedOrgFilter !== 'all') {
       filtered = filtered.filter(plan => plan.organization === reviewedOrgFilter);
+      console.log(`After organization filter (${reviewedOrgFilter}): ${filtered.length} plans`);
     }
 
     // Apply search filter
@@ -790,6 +822,7 @@ const AdminDashboard: React.FC = () => {
         getOrganizationName(plan).toLowerCase().includes(reviewedSearch.toLowerCase()) ||
         (plan.planner_name && plan.planner_name.toLowerCase().includes(reviewedSearch.toLowerCase()))
       );
+      console.log(`After search filter (${reviewedSearch}): ${filtered.length} plans`);
     }
 
     // Apply sorting
@@ -829,6 +862,7 @@ const AdminDashboard: React.FC = () => {
         return subActivity.organization === plan.organization;
       });
 
+      console.log(`Plan ${plan.id} (${getOrganizationName(plan)}): found ${planSubActivities.length} sub-activities`);
 
       let totalBudget = 0;
       let totalFunding = 0;
@@ -866,6 +900,7 @@ const AdminDashboard: React.FC = () => {
 
       const gap = Math.max(0, totalBudget - totalFunding);
 
+      console.log(`Plan ${plan.id} budget: total=${totalBudget}, funding=${totalFunding}, gap=${gap}`);
 
       return {
         ...plan,
