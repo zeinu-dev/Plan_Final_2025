@@ -583,7 +583,14 @@ class PlanSerializer(serializers.ModelSerializer):
         if not selected_objectives and obj.strategic_objective:
             selected_objectives = [obj.strategic_objective]
 
-        return StrategicObjectiveSerializer(selected_objectives, many=True, context=self.context).data
+        print(f"PlanSerializer.get_objectives for plan {obj.id}: {len(selected_objectives)} objectives")
+        serialized_data = StrategicObjectiveSerializer(selected_objectives, many=True, context=self.context).data
+
+        for idx, obj_data in enumerate(serialized_data):
+            initiatives_count = len(obj_data.get('initiatives', []))
+            print(f"  Objective {idx}: {obj_data.get('title')} has {initiatives_count} initiatives")
+
+        return serialized_data
 
 class UserSerializer(serializers.ModelSerializer):
     userOrganizations = serializers.SerializerMethodField()

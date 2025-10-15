@@ -21,6 +21,12 @@ const AdminPlanSummary: React.FC = () => {
 
       // The /plans/:id/ endpoint returns objectives via get_objectives() which includes all nested data
       const response = await api.get(`/plans/${planId}/`);
+      console.log('Admin Plan Summary - Full API Response:', response.data);
+      console.log('Admin Plan Summary - Objectives:', response.data?.objectives);
+      if (response.data?.objectives && response.data.objectives.length > 0) {
+        console.log('Admin Plan Summary - First Objective:', response.data.objectives[0]);
+        console.log('Admin Plan Summary - First Objective Initiatives:', response.data.objectives[0]?.initiatives);
+      }
       return response.data;
     },
     enabled: !!planId,
