@@ -264,7 +264,7 @@ class SubActivitySerializer(serializers.ModelSerializer):
 
 class MainActivitySerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(source='organization.name', read_only=True)
-    sub_activities = serializers.SerializerMethodField()
+    sub_activities = SubActivitySerializer(many=True, read_only=True)
     total_budget = serializers.SerializerMethodField()
     total_funding = serializers.SerializerMethodField()
     funding_gap = serializers.SerializerMethodField()
@@ -278,19 +278,6 @@ class MainActivitySerializer(serializers.ModelSerializer):
             'sub_activities', 'total_budget', 'total_funding', 'funding_gap',
             'created_at', 'updated_at'
         ]
-
-    def get_sub_activities(self, obj):
-        """Return sub_activities for this MainActivity"""
-        try:
-            # Since MainActivity was already filtered by organization in get_main_activities,
-            # we just return all sub_activities for THIS specific MainActivity
-            sub_activities = obj.sub_activities.all()
-            return SubActivitySerializer(sub_activities, many=True).data
-        except Exception as e:
-            print(f"Error getting sub_activities for activity {obj.id}: {e}")
-            import traceback
-            traceback.print_exc()
-            return []
 
     def get_total_budget(self, obj):
         try:
