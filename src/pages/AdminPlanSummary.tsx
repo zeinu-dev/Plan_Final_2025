@@ -13,13 +13,14 @@ const AdminPlanSummary: React.FC = () => {
   const { t } = useLanguage();
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch plan data using the complete endpoint
+  // Fetch plan data - backend includes objectives with nested data via PlanSerializer
   const { data: planData, isLoading, error: planError } = useQuery({
     queryKey: ['admin-plan-summary', planId],
     queryFn: async () => {
       if (!planId) throw new Error('Plan ID is required');
 
-      const response = await api.get(`/plans/${planId}/complete/`);
+      // The /plans/:id/ endpoint returns objectives via get_objectives() which includes all nested data
+      const response = await api.get(`/plans/${planId}/`);
       return response.data;
     },
     enabled: !!planId,

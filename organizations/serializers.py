@@ -141,19 +141,23 @@ class StrategicInitiativeSerializer(serializers.ModelSerializer):
 
     def get_performance_measures(self, obj):
         try:
-            # Filter performance measures by request user's organization
             measures = obj.performance_measures.all()
             request = self.context.get('request')
-            if request and request.user.is_authenticated:
+
+            # Only filter if initiative belongs to user's organization
+            # This allows admins to see all measures when viewing other org plans
+            if request and request.user.is_authenticated and obj.organization:
                 user_org = getattr(request.user, 'organization_users', None)
                 if user_org and hasattr(user_org, 'first'):
                     user_org_instance = user_org.first()
                     if user_org_instance:
                         user_org_id = user_org_instance.organization_id
-                        measures = measures.filter(
-                            models.Q(organization__isnull=True) |
-                            models.Q(organization=user_org_id)
-                        )
+                        # Only filter if this initiative belongs to user's org
+                        if obj.organization_id == user_org_id:
+                            measures = measures.filter(
+                                models.Q(organization__isnull=True) |
+                                models.Q(organization=user_org_id)
+                            )
             return PerformanceMeasureSerializer(measures, many=True).data
         except Exception as e:
             print(f"Error getting performance measures for initiative {obj.id}: {e}")
@@ -161,19 +165,23 @@ class StrategicInitiativeSerializer(serializers.ModelSerializer):
 
     def get_main_activities(self, obj):
         try:
-            # Filter main activities by request user's organization
             activities = obj.main_activities.all()
             request = self.context.get('request')
-            if request and request.user.is_authenticated:
+
+            # Only filter if initiative belongs to user's organization
+            # This allows admins to see all activities when viewing other org plans
+            if request and request.user.is_authenticated and obj.organization:
                 user_org = getattr(request.user, 'organization_users', None)
                 if user_org and hasattr(user_org, 'first'):
                     user_org_instance = user_org.first()
                     if user_org_instance:
                         user_org_id = user_org_instance.organization_id
-                        activities = activities.filter(
-                            models.Q(organization__isnull=True) |
-                            models.Q(organization=user_org_id)
-                        )
+                        # Only filter if this initiative belongs to user's org
+                        if obj.organization_id == user_org_id:
+                            activities = activities.filter(
+                                models.Q(organization__isnull=True) |
+                                models.Q(organization=user_org_id)
+                            )
             return MainActivitySerializer(activities, many=True, context=self.context).data
         except Exception as e:
             print(f"Error getting main activities for initiative {obj.id}: {e}")
