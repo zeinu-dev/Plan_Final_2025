@@ -264,7 +264,7 @@ class SubActivitySerializer(serializers.ModelSerializer):
 
 class MainActivitySerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(source='organization.name', read_only=True)
-    sub_activities = SubActivitySerializer(many=True, read_only=True)
+    sub_activities = serializers.SerializerMethodField()
     total_budget = serializers.SerializerMethodField()
     total_funding = serializers.SerializerMethodField()
     funding_gap = serializers.SerializerMethodField()
@@ -278,6 +278,31 @@ class MainActivitySerializer(serializers.ModelSerializer):
             'sub_activities', 'total_budget', 'total_funding', 'funding_gap',
             'created_at', 'updated_at'
         ]
+
+    def get_sub_activities(self, obj):
+        """Return sub_activities, filtering by plan organization if context provides it"""
+        try:
+            all_sub_activities = obj.sub_activities.all()
+
+            # Check if we have a plan_organization_id in context (from admin view)
+            plan_org_id = self.context.get('plan_organization_id')
+
+            if plan_org_id:
+                # Filter sub_activities to only show those from the plan's organization
+                # Sub-activities don't have organization field directly, but their main_activity does
+                # Since we're already serializing a MainActivity that was filtered by organization,
+                # we just need to ensure we're getting sub_activities for THIS activity
+                # which should all belong to the same organization as the MainActivity
+                filtered_sub_activities = all_sub_activities.filter(main_activity__organization_id=plan_org_id)
+                return SubActivitySerializer(filtered_sub_activities, many=True).data
+
+            # Default: return all sub_activities for this MainActivity
+            return SubActivitySerializer(all_sub_activities, many=True).data
+        except Exception as e:
+            print(f"Error getting sub_activities for activity {obj.id}: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
 
     def get_total_budget(self, obj):
         try:
