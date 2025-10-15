@@ -787,15 +787,31 @@ class AdminStrategicObjectiveSerializer(serializers.ModelSerializer):
             return []
 
     def get_initiatives(self, obj):
-        """Return ALL initiatives without any organization filtering"""
+        """Return initiatives filtered by plan's organization (defaults + org-specific)"""
         try:
             # Get ALL initiatives for this objective
-            initiatives = obj.initiatives.all()
-            print(f"[ADMIN SERIALIZER] Objective '{obj.title}': Found {initiatives.count()} initiatives (no filtering)")
+            all_initiatives = obj.initiatives.all()
+            print(f"[ADMIN SERIALIZER] Objective '{obj.title}': Found {all_initiatives.count()} total initiatives")
 
-            # Use admin initiative serializer
+            # Get plan's organization from context
+            plan_org_id = self.context.get('plan_organization_id')
+
+            if plan_org_id:
+                # Filter: default initiatives OR initiatives from plan's organization
+                from django.db.models import Q
+                filtered_initiatives = all_initiatives.filter(
+                    Q(is_default=True) | Q(organization_id=plan_org_id)
+                )
+                print(f"[ADMIN SERIALIZER] Filtered to {filtered_initiatives.count()} initiatives (defaults + org {plan_org_id})")
+                initiatives = filtered_initiatives
+            else:
+                # No context, return all (shouldn't happen in admin view)
+                print(f"[ADMIN SERIALIZER] WARNING: No plan_organization_id in context, returning all")
+                initiatives = all_initiatives
+
+            # Use admin initiative serializer and pass context
             from .serializers import AdminStrategicInitiativeSerializer
-            serialized = AdminStrategicInitiativeSerializer(initiatives, many=True).data
+            serialized = AdminStrategicInitiativeSerializer(initiatives, many=True, context=self.context).data
             print(f"[ADMIN SERIALIZER] Serialized {len(serialized)} initiatives")
 
             return serialized
@@ -834,21 +850,47 @@ class AdminStrategicInitiativeSerializer(serializers.ModelSerializer):
         ]
 
     def get_performance_measures(self, obj):
-        """Return ALL performance measures without any organization filtering"""
+        """Return performance measures filtered by plan's organization (defaults + org-specific)"""
         try:
-            measures = obj.performance_measures.all()
-            print(f"[ADMIN SERIALIZER] Initiative '{obj.name}': Found {measures.count()} measures (no filtering)")
+            all_measures = obj.performance_measures.all()
+            print(f"[ADMIN SERIALIZER] Initiative '{obj.name}': Found {all_measures.count()} total measures")
+
+            plan_org_id = self.context.get('plan_organization_id')
+
+            if plan_org_id:
+                from django.db.models import Q
+                filtered_measures = all_measures.filter(
+                    Q(is_default=True) | Q(organization_id=plan_org_id)
+                )
+                print(f"[ADMIN SERIALIZER] Filtered to {filtered_measures.count()} measures (defaults + org {plan_org_id})")
+                measures = filtered_measures
+            else:
+                measures = all_measures
+
             return PerformanceMeasureSerializer(measures, many=True).data
         except Exception as e:
             print(f"AdminStrategicInitiativeSerializer - Error getting measures: {e}")
             return []
 
     def get_main_activities(self, obj):
-        """Return ALL main activities without any organization filtering"""
+        """Return main activities filtered by plan's organization (defaults + org-specific)"""
         try:
-            activities = obj.main_activities.all()
-            print(f"[ADMIN SERIALIZER] Initiative '{obj.name}': Found {activities.count()} activities (no filtering)")
-            return MainActivitySerializer(activities, many=True).data
+            all_activities = obj.main_activities.all()
+            print(f"[ADMIN SERIALIZER] Initiative '{obj.name}': Found {all_activities.count()} total activities")
+
+            plan_org_id = self.context.get('plan_organization_id')
+
+            if plan_org_id:
+                from django.db.models import Q
+                filtered_activities = all_activities.filter(
+                    Q(is_default=True) | Q(organization_id=plan_org_id)
+                )
+                print(f"[ADMIN SERIALIZER] Filtered to {filtered_activities.count()} activities (defaults + org {plan_org_id})")
+                activities = filtered_activities
+            else:
+                activities = all_activities
+
+            return MainActivitySerializer(activities, many=True, context=self.context).data
         except Exception as e:
             print(f"AdminStrategicInitiativeSerializer - Error getting activities: {e}")
             return []
@@ -896,16 +938,18 @@ class AdminPlanSerializer(serializers.ModelSerializer):
         ]
 
     def get_objectives(self, obj):
-        """Get all selected objectives with their complete data - NO organization filtering"""
+        """Get all selected objectives with their complete data - filter by plan's organization"""
         selected_objectives = obj.selected_objectives.all()
 
         if not selected_objectives and obj.strategic_objective:
             selected_objectives = [obj.strategic_objective]
 
-        print(f"[ADMIN PLAN SERIALIZER] Plan {obj.id}: Serializing {len(selected_objectives)} objectives")
+        print(f"[ADMIN PLAN SERIALIZER] Plan {obj.id} from organization {obj.organization.name} (ID: {obj.organization.id})")
+        print(f"[ADMIN PLAN SERIALIZER] Serializing {len(selected_objectives)} objectives")
 
-        # Use admin objective serializer
-        serialized_data = AdminStrategicObjectiveSerializer(selected_objectives, many=True).data
+        # Pass plan's organization in context so initiatives can be filtered
+        context = {'plan_organization_id': obj.organization.id}
+        serialized_data = AdminStrategicObjectiveSerializer(selected_objectives, many=True, context=context).data
 
         for idx, obj_data in enumerate(serialized_data):
             initiatives_count = len(obj_data.get('initiatives', []))
