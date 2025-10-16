@@ -163,27 +163,51 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
     name: org.organization_name
   })) || [];
 
-  // Prepare data for performance bar chart
-  const performanceChartLabels: string[] = [];
-  const performanceChartDataValues: number[] = [];
-  const performanceChartColors: string[] = [];
+  // Prepare data for performance bar chart - aggregate by organization
+  const organizationPerformance: Array<{
+    name: string;
+    code: string;
+    totalPercentage: number;
+    color: string;
+    objectiveCount: number;
+  }> = [];
 
   filteredObjectives.forEach((org: any) => {
-    org.objectives.forEach((obj: any) => {
-      const label = `${org.organization_name} - ${obj.title.substring(0, 40)}`;
-      performanceChartLabels.push(label);
-      performanceChartDataValues.push(obj.achievement_percentage);
-      performanceChartColors.push(obj.color);
+    // Calculate average percentage across all objectives for this organization
+    const totalPercentage = org.objectives.reduce((sum: number, obj: any) => sum + obj.achievement_percentage, 0);
+    const avgPercentage = org.objectives.length > 0 ? totalPercentage / org.objectives.length : 0;
+
+    // Determine color based on average percentage
+    let color = '#F2250A';  // Red (default)
+    if (avgPercentage >= 95) {
+      color = '#00A300';  // Dark Green
+    } else if (avgPercentage >= 80) {
+      color = '#93C572';  // Light Green
+    } else if (avgPercentage >= 65) {
+      color = '#FFFF00';  // Dark Yellow
+    } else if (avgPercentage >= 55) {
+      color = '#FFBF00';  // Light Yellow
+    }
+
+    organizationPerformance.push({
+      name: org.organization_name,
+      code: org.organization_code || `ORG-${org.organization_id}`,
+      totalPercentage: avgPercentage,
+      color: color,
+      objectiveCount: org.objectives.length
     });
   });
 
+  // Sort by percentage descending
+  organizationPerformance.sort((a, b) => b.totalPercentage - a.totalPercentage);
+
   const performanceChartData = {
-    labels: performanceChartLabels,
+    labels: organizationPerformance.map(org => `${org.code} - ${org.name}`),
     datasets: [{
       label: 'Achievement %',
-      data: performanceChartDataValues,
-      backgroundColor: performanceChartColors,
-      borderColor: performanceChartColors,
+      data: organizationPerformance.map(org => org.totalPercentage),
+      backgroundColor: organizationPerformance.map(org => org.color),
+      borderColor: organizationPerformance.map(org => org.color),
       borderWidth: 1
     }]
   };

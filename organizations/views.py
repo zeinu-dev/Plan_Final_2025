@@ -2258,7 +2258,7 @@ class ReportViewSet(viewsets.ModelViewSet):
                             'target': float(target),
                             'achievement': float(achievement_record.achievement) if achievement_record else 0,
                             'justification': achievement_record.justification if achievement_record else '',
-                            'sub_activities': sub_activities_data
+                            'subActivities': sub_activities_data
                         })
 
                 if measures_data or activities_data:
@@ -2702,6 +2702,7 @@ def report_statistics(request):
                 objective_achievements_by_org.append({
                     'organization_id': org.id,
                     'organization_name': org.name,
+                    'organization_code': f'ORG-{org.id:04d}',
                     'objectives': org_objectives
                 })
 
@@ -2745,15 +2746,28 @@ def report_statistics(request):
             total_other_budget = Decimal('0')
 
             if report.plan:
-                # Get all sub-activities for the plan
-                sub_activities = SubActivity.objects.filter(
-                    main_activity__strategic_initiative__strategic_objective__plan=report.plan
-                )
-                for sub_activity in sub_activities:
-                    total_govt_budget += Decimal(str(sub_activity.government_treasury or 0))
-                    total_sdg_budget += Decimal(str(sub_activity.sdg_funding or 0))
-                    total_partners_budget += Decimal(str(sub_activity.partners_funding or 0))
-                    total_other_budget += Decimal(str(sub_activity.other_funding or 0))
+                try:
+                    # Get all sub-activities for the plan through the selected objectives
+                    # Include activities from both default initiatives (organization=NULL)
+                    # and custom initiatives from this organization
+                    selected_obj_ids = list(report.plan.selected_objectives.values_list('id', flat=True))
+
+                    if selected_obj_ids:
+                        sub_activities = SubActivity.objects.filter(
+                            main_activity__initiative__strategic_objective_id__in=selected_obj_ids
+                        ).filter(
+                            Q(main_activity__initiative__organization=report.organization) |
+                            Q(main_activity__initiative__organization__isnull=True)
+                        )
+
+                        for sub_activity in sub_activities:
+                            total_govt_budget += Decimal(str(sub_activity.government_treasury or 0))
+                            total_sdg_budget += Decimal(str(sub_activity.sdg_funding or 0))
+                            total_partners_budget += Decimal(str(sub_activity.partners_funding or 0))
+                            total_other_budget += Decimal(str(sub_activity.other_funding or 0))
+                except Exception as sub_error:
+                    # Log the error but don't fail the entire request
+                    logger.warning(f"Error calculating budget for report {report.id}: {str(sub_error)}")
 
             total_budget = float(total_govt_budget + total_sdg_budget + total_partners_budget + total_other_budget)
             total_utilized = total_govt_utilized + total_sdg_utilized + total_partners_utilized + total_other_utilized
