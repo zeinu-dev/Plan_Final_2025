@@ -485,13 +485,13 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
       </div>
 
           {/* Performance Bar Chart */}
-          {performanceChartLabels.length > 0 && (
+          {organizationPerformance.length > 0 && (
             <div className="bg-white rounded-lg shadow p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
                 <TrendingUp className="h-6 w-6 mr-2 text-blue-600" />
                 Organization Performance Overview
               </h2>
-              <div style={{ height: `${Math.max(400, performanceChartLabels.length * 40)}px` }}>
+              <div style={{ height: `${Math.max(400, organizationPerformance.length * 50)}px` }}>
                 <Bar data={performanceChartData} options={performanceChartOptions} />
               </div>
             </div>
