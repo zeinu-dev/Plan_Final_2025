@@ -573,11 +573,8 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
           <div>
           <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
             <DollarSign className="h-6 w-6 mr-2 text-green-600" />
-            M&E Report - Budget Utilization by Source
+            Budget Utilization by Source
           </h2>
-          <p className="text-sm text-gray-600 mb-6">
-            Actual budget utilized amounts as reported in approved M&E reports, aggregated by funding source.
-          </p>
 
           {/* Budget Chart */}
           <div className="bg-white rounded-lg shadow p-6 mb-6">
