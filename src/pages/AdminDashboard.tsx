@@ -210,9 +210,9 @@ const AdminDashboard: React.FC = () => {
         return { data: [] };
       }
     },
-    enabled: isAuthInitialized && (allowedOrgIds.length > 0 || adminOrgType === 'MINISTER'),
-    staleTime: 10 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
+    enabled: isAuthInitialized && mainTab === 'plans' && (allowedOrgIds.length > 0 || adminOrgType === 'MINISTER') && (planSubTab === 'budget-activity' || planSubTab === 'overview'),
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     retry: 1
   });
 
@@ -256,9 +256,9 @@ const AdminDashboard: React.FC = () => {
         return { data: [] };
       }
     },
-    enabled: isAuthInitialized && (allowedOrgIds.length > 0 || adminOrgType === 'MINISTER'),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    enabled: isAuthInitialized && mainTab === 'plans' && (allowedOrgIds.length > 0 || adminOrgType === 'MINISTER'),
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     retry: 1
   });
 
@@ -301,6 +301,19 @@ const AdminDashboard: React.FC = () => {
 
   // Calculate budget totals directly from sub-activities
   const budgetTotals = useMemo(() => {
+    // Only compute when on overview tab
+    if (mainTab !== 'plans' || planSubTab !== 'overview') {
+      return {
+        totalBudget: 0,
+        totalFunding: 0,
+        fundingGap: 0,
+        governmentTotal: 0,
+        partnersTotal: 0,
+        sdgTotal: 0,
+        otherTotal: 0
+      };
+    }
+
     const subActivities = directSubActivitiesData?.data || [];
     const submittedAndApprovedPlans = reviewedPlansData.filter(plan => ['SUBMITTED', 'APPROVED'].includes(plan.status));
     const submittedAndApprovedOrgIds = submittedAndApprovedPlans.map(plan => Number(plan.organization));
@@ -360,10 +373,23 @@ const AdminDashboard: React.FC = () => {
       sdgTotal,
       otherTotal
     };
-  }, [directSubActivitiesData?.data, reviewedPlansData]);
+  }, [mainTab, planSubTab, directSubActivitiesData?.data, reviewedPlansData]);
 
   // Calculate activity type budgets directly from sub-activities
   const calculateActivityTypeBudgets = useMemo(() => {
+    // Only compute when on overview tab
+    if (mainTab !== 'plans' || planSubTab !== 'overview') {
+      return {
+        Training: { count: 0, budget: 0 },
+        Meeting: { count: 0, budget: 0 },
+        Workshop: { count: 0, budget: 0 },
+        Supervision: { count: 0, budget: 0 },
+        Procurement: { count: 0, budget: 0 },
+        Printing: { count: 0, budget: 0 },
+        Other: { count: 0, budget: 0 }
+      };
+    }
+
     const subActivities = directSubActivitiesData?.data || [];
     const submittedAndApprovedPlans = reviewedPlansData.filter(plan => ['SUBMITTED', 'APPROVED'].includes(plan.status));
     const submittedAndApprovedOrgIds = submittedAndApprovedPlans.map(plan => Number(plan.organization));
@@ -401,7 +427,7 @@ const AdminDashboard: React.FC = () => {
     });
 
     return activityBudgets;
-  }, [directSubActivitiesData?.data, reviewedPlansData]);
+  }, [mainTab, planSubTab, directSubActivitiesData?.data, reviewedPlansData]);
 
   // Calculate monthly trends
   const monthlyTrends = useMemo(() => {
