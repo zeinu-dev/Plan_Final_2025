@@ -499,7 +499,13 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
                     Overall Achievement
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Total Budget
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Budget Utilized
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Remaining Budget
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -509,7 +515,7 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredReports.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                       No approved reports available
                     </td>
                   </tr>
@@ -543,7 +549,15 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ETB {report.budget_utilization.total.toLocaleString()}
+                        ETB {(report.budget_utilization.total_budget || 0).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ETB {(report.budget_utilization.total_utilized || 0).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <span className={(report.budget_utilization.total_remaining || 0) < 0 ? 'text-red-600 font-semibold' : ''}>
+                          ETB {(report.budget_utilization.total_remaining || 0).toLocaleString()}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button

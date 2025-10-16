@@ -2731,12 +2731,33 @@ def report_statistics(request):
 
             avg_achievement = float(total_percentage / measure_count) if measure_count > 0 else 0
 
-            # Calculate budget utilization
+            # Calculate budget utilization and total budget
             budget_utils = report.budget_utilizations.all()
-            total_govt = sum(float(bu.government_treasury_utilized) for bu in budget_utils)
-            total_sdg = sum(float(bu.sdg_funding_utilized) for bu in budget_utils)
-            total_partners = sum(float(bu.partners_funding_utilized) for bu in budget_utils)
-            total_other = sum(float(bu.other_funding_utilized) for bu in budget_utils)
+            total_govt_utilized = sum(float(bu.government_treasury_utilized or 0) for bu in budget_utils)
+            total_sdg_utilized = sum(float(bu.sdg_funding_utilized or 0) for bu in budget_utils)
+            total_partners_utilized = sum(float(bu.partners_funding_utilized or 0) for bu in budget_utils)
+            total_other_utilized = sum(float(bu.other_funding_utilized or 0) for bu in budget_utils)
+
+            # Calculate total budget from sub-activities
+            total_govt_budget = Decimal('0')
+            total_sdg_budget = Decimal('0')
+            total_partners_budget = Decimal('0')
+            total_other_budget = Decimal('0')
+
+            if report.plan:
+                # Get all sub-activities for the plan
+                sub_activities = SubActivity.objects.filter(
+                    main_activity__strategic_initiative__strategic_objective__plan=report.plan
+                )
+                for sub_activity in sub_activities:
+                    total_govt_budget += Decimal(str(sub_activity.government_treasury or 0))
+                    total_sdg_budget += Decimal(str(sub_activity.sdg_funding or 0))
+                    total_partners_budget += Decimal(str(sub_activity.partners_funding or 0))
+                    total_other_budget += Decimal(str(sub_activity.other_funding or 0))
+
+            total_budget = float(total_govt_budget + total_sdg_budget + total_partners_budget + total_other_budget)
+            total_utilized = total_govt_utilized + total_sdg_utilized + total_partners_utilized + total_other_utilized
+            total_remaining = total_budget - total_utilized
 
             organization_reports.append({
                 'report_id': report.id,
@@ -2747,11 +2768,18 @@ def report_statistics(request):
                 'status': report.status,
                 'overall_achievement': round(avg_achievement, 2),
                 'budget_utilization': {
-                    'government_treasury': round(total_govt, 2),
-                    'sdg_funding': round(total_sdg, 2),
-                    'partners_funding': round(total_partners, 2),
-                    'other_funding': round(total_other, 2),
-                    'total': round(total_govt + total_sdg + total_partners + total_other, 2)
+                    'government_treasury_utilized': round(total_govt_utilized, 2),
+                    'sdg_funding_utilized': round(total_sdg_utilized, 2),
+                    'partners_funding_utilized': round(total_partners_utilized, 2),
+                    'other_funding_utilized': round(total_other_utilized, 2),
+                    'government_treasury_budget': round(float(total_govt_budget), 2),
+                    'sdg_funding_budget': round(float(total_sdg_budget), 2),
+                    'partners_funding_budget': round(float(total_partners_budget), 2),
+                    'other_funding_budget': round(float(total_other_budget), 2),
+                    'total_budget': round(total_budget, 2),
+                    'total_utilized': round(total_utilized, 2),
+                    'total_remaining': round(total_remaining, 2),
+                    'total': round(total_utilized, 2)
                 }
             })
 
