@@ -903,23 +903,69 @@ const Reporting: React.FC = () => {
             >
               Back
             </button>
-            <button
-              onClick={handleSaveAchievements}
-              disabled={saveAchievementsMutation.isPending}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center"
-            >
-              {saveAchievementsMutation.isPending ? (
-                <>
-                  <Loader className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4 mr-2" />
-                  Proceed
-                </>
-              )}
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  // Save achievements first, then save as draft
+                  const achievements = Object.entries(performanceAchievements).map(([id, data]) => ({
+                    performance_measure: parseInt(id),
+                    achievement: data.achievement,
+                    justification: data.justification
+                  }));
+
+                  const activities = Object.entries(activityAchievements).map(([id, data]) => ({
+                    main_activity: parseInt(id),
+                    achievement: data.achievement,
+                    justification: data.justification
+                  }));
+
+                  // Save achievements if any exist
+                  if (achievements.length > 0 || activities.length > 0) {
+                    saveAchievementsMutation.mutate({
+                      report_id: reportId!,
+                      performance_achievements: achievements,
+                      activity_achievements: activities
+                    });
+                  }
+
+                  // Then save as draft
+                  setTimeout(() => {
+                    saveDraftMutation.mutate();
+                  }, 500);
+                }}
+                disabled={saveDraftMutation.isPending || saveAchievementsMutation.isPending}
+                className="px-6 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 disabled:opacity-50 flex items-center"
+              >
+                {saveDraftMutation.isPending || saveAchievementsMutation.isPending ? (
+                  <>
+                    <Loader className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save as Draft
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleSaveAchievements}
+                disabled={saveAchievementsMutation.isPending || saveDraftMutation.isPending}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center"
+              >
+                {saveAchievementsMutation.isPending ? (
+                  <>
+                    <Loader className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Proceed
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -934,6 +980,12 @@ const Reporting: React.FC = () => {
             reportId={reportId!}
             onSave={async (utilizations) => {
               await saveBudgetUtilizationsMutation.mutateAsync(utilizations);
+            }}
+            onSaveDraft={async (utilizations) => {
+              // Save budget utilizations first
+              await saveBudgetUtilizationsMutation.mutateAsync(utilizations);
+              // Then save as draft
+              await saveDraftMutation.mutateAsync();
             }}
             onBack={() => setStep(2)}
             isLoading={isLoadingPlan}

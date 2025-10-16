@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader } from 'lucide-react';
+import { Loader, Save } from 'lucide-react';
 import { ReportPlanData } from '../types/report';
 
 interface BudgetUtilization {
@@ -24,6 +24,7 @@ interface BudgetUtilizationFormProps {
   reportId: number;
   onSave: (utilizations: BudgetUtilization[]) => Promise<void>;
   onBack: () => void;
+  onSaveDraft?: (utilizations: BudgetUtilization[]) => Promise<void>;
   isLoading?: boolean;
   existingUtilizations?: Record<number, BudgetUtilization>;
 }
@@ -33,11 +34,13 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
   reportId,
   onSave,
   onBack,
+  onSaveDraft,
   isLoading = false,
   existingUtilizations = {}
 }) => {
   const [utilizations, setUtilizations] = useState<Record<number, BudgetUtilization>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
 
   useEffect(() => {
     if (existingUtilizations && Object.keys(existingUtilizations).length > 0) {
@@ -82,6 +85,26 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
       await onSave(utilizationArray);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!onSaveDraft) return;
+
+    setIsSavingDraft(true);
+    try {
+      const utilizationArray = Object.values(utilizations).map(util => ({
+        sub_activity: util.sub_activity,
+        government_treasury_utilized: Number(util.government_treasury_utilized) || 0,
+        sdg_funding_utilized: Number(util.sdg_funding_utilized) || 0,
+        partners_funding_utilized: Number(util.partners_funding_utilized) || 0,
+        other_funding_utilized: Number(util.other_funding_utilized) || 0,
+      }));
+
+      console.log('Saving budget utilizations as draft:', utilizationArray);
+      await onSaveDraft(utilizationArray);
+    } finally {
+      setIsSavingDraft(false);
     }
   };
 
@@ -447,25 +470,46 @@ export const BudgetUtilizationForm: React.FC<BudgetUtilizationFormProps> = ({
       <div className="mt-6 flex justify-between">
         <button
           onClick={onBack}
-          disabled={isSaving}
+          disabled={isSaving || isSavingDraft}
           className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
         >
           Back
         </button>
-        <button
-          onClick={handleSubmit}
-          disabled={isSaving}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center"
-        >
-          {isSaving ? (
-            <>
-              <Loader className="h-4 w-4 mr-2 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            'Save & Continue'
+        <div className="flex gap-3">
+          {onSaveDraft && (
+            <button
+              onClick={handleSaveDraft}
+              disabled={isSaving || isSavingDraft}
+              className="px-6 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 disabled:opacity-50 flex items-center"
+            >
+              {isSavingDraft ? (
+                <>
+                  <Loader className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save as Draft
+                </>
+              )}
+            </button>
           )}
-        </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isSaving || isSavingDraft}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center"
+          >
+            {isSaving ? (
+              <>
+                <Loader className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save & Continue'
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
