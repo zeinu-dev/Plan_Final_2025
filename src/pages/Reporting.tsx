@@ -324,6 +324,46 @@ const Reporting: React.FC = () => {
     }
   });
 
+  const saveDraftMutation = useMutation({
+    mutationFn: async () => {
+      if (!reportId) throw new Error('No report ID');
+
+      console.log('=== SAVING DRAFT ===');
+      console.log('Report ID:', reportId);
+
+      // Upload narrative file if provided
+      if (narrativeFile) {
+        console.log('Uploading narrative file:', narrativeFile.name);
+        const formData = new FormData();
+        formData.append('narrative_report', narrativeFile);
+
+        const uploadResponse = await api.patch(`/reports/${reportId}/`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        console.log('File upload response:', uploadResponse);
+      }
+
+      // Update report status to DRAFT
+      const response = await api.patch(`/reports/${reportId}/`, { status: 'DRAFT' });
+      console.log('Draft saved response:', response);
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
+      setSuccess('Report saved as draft. You can continue later from the dashboard.');
+      setTimeout(() => {
+        setSuccess(null);
+        navigate('/dashboard');
+      }, 2000);
+    },
+    onError: (err: any) => {
+      console.error('Save draft error:', err);
+      const errorMessage = err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to save draft';
+      setError(errorMessage);
+      setTimeout(() => setError(null), 5000);
+    }
+  });
+
   const submitReportMutation = useMutation({
     mutationFn: async () => {
       if (!reportId) throw new Error('No report ID');
@@ -981,23 +1021,42 @@ const Reporting: React.FC = () => {
             >
               Back to Review
             </button>
-            <button
-              onClick={handleFinishReporting}
-              disabled={submitReportMutation.isPending}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center"
-            >
-              {submitReportMutation.isPending ? (
-                <>
-                  <Loader className="h-4 w-4 mr-2 animate-spin" />
-                  {currentReport?.status === 'REJECTED' ? 'Resubmitting...' : 'Submitting...'}
-                </>
-              ) : (
-                <>
-                  <Upload className="h-4 w-4 mr-2" />
-                  {currentReport?.status === 'REJECTED' ? 'Resubmit Report' : 'Submit for Evaluation'}
-                </>
-              )}
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => saveDraftMutation.mutate()}
+                disabled={saveDraftMutation.isPending || submitReportMutation.isPending}
+                className="px-6 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 disabled:opacity-50 flex items-center"
+              >
+                {saveDraftMutation.isPending ? (
+                  <>
+                    <Loader className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save as Draft
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleFinishReporting}
+                disabled={submitReportMutation.isPending || saveDraftMutation.isPending}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center"
+              >
+                {submitReportMutation.isPending ? (
+                  <>
+                    <Loader className="h-4 w-4 mr-2 animate-spin" />
+                    {currentReport?.status === 'REJECTED' ? 'Resubmitting...' : 'Submitting...'}
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    {currentReport?.status === 'REJECTED' ? 'Resubmit Report' : 'Submit for Evaluation'}
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
