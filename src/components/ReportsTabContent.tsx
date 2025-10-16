@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Building2, CheckCircle, XCircle, Loader, Eye, DollarSign, TrendingUp } from 'lucide-react';
 import { useLanguage } from '../lib/i18n/LanguageContext';
 import { reports, api } from '../lib/api';
@@ -164,44 +164,47 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
   })) || [];
 
   // Prepare data for performance bar chart - aggregate by organization
-  const organizationPerformance: Array<{
-    name: string;
-    code: string;
-    totalPercentage: number;
-    color: string;
-    objectiveCount: number;
-  }> = [];
+  const organizationPerformance = useMemo(() => {
+    const performance: Array<{
+      name: string;
+      code: string;
+      totalPercentage: number;
+      color: string;
+      objectiveCount: number;
+    }> = [];
 
-  filteredObjectives.forEach((org: any) => {
-    // Calculate average percentage across all objectives for this organization
-    const totalPercentage = org.objectives.reduce((sum: number, obj: any) => sum + obj.achievement_percentage, 0);
-    const avgPercentage = org.objectives.length > 0 ? totalPercentage / org.objectives.length : 0;
+    filteredObjectives.forEach((org: any) => {
+      // Calculate average percentage across all objectives for this organization
+      const totalPercentage = org.objectives.reduce((sum: number, obj: any) => sum + obj.achievement_percentage, 0);
+      const avgPercentage = org.objectives.length > 0 ? totalPercentage / org.objectives.length : 0;
 
-    // Determine color based on average percentage
-    let color = '#F2250A';  // Red (default)
-    if (avgPercentage >= 95) {
-      color = '#00A300';  // Dark Green
-    } else if (avgPercentage >= 80) {
-      color = '#93C572';  // Light Green
-    } else if (avgPercentage >= 65) {
-      color = '#FFFF00';  // Dark Yellow
-    } else if (avgPercentage >= 55) {
-      color = '#FFBF00';  // Light Yellow
-    }
+      // Determine color based on average percentage
+      let color = '#F2250A';  // Red (default)
+      if (avgPercentage >= 95) {
+        color = '#00A300';  // Dark Green
+      } else if (avgPercentage >= 80) {
+        color = '#93C572';  // Light Green
+      } else if (avgPercentage >= 65) {
+        color = '#FFFF00';  // Dark Yellow
+      } else if (avgPercentage >= 55) {
+        color = '#FFBF00';  // Light Yellow
+      }
 
-    organizationPerformance.push({
-      name: org.organization_name,
-      code: org.organization_code || `ORG-${org.organization_id}`,
-      totalPercentage: avgPercentage,
-      color: color,
-      objectiveCount: org.objectives.length
+      performance.push({
+        name: org.organization_name,
+        code: org.organization_code || `ORG-${org.organization_id}`,
+        totalPercentage: avgPercentage,
+        color: color,
+        objectiveCount: org.objectives.length
+      });
     });
-  });
 
-  // Sort by percentage descending
-  organizationPerformance.sort((a, b) => b.totalPercentage - a.totalPercentage);
+    // Sort by percentage descending
+    performance.sort((a, b) => b.totalPercentage - a.totalPercentage);
+    return performance;
+  }, [filteredObjectives]);
 
-  const performanceChartData = {
+  const performanceChartData = useMemo(() => ({
     labels: organizationPerformance.map(org => `${org.code} - ${org.name}`),
     datasets: [{
       label: 'Achievement %',
@@ -210,7 +213,7 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
       borderColor: organizationPerformance.map(org => org.color),
       borderWidth: 1
     }]
-  };
+  }), [organizationPerformance]);
 
   const performanceChartOptions = {
     indexAxis: 'y' as const,
@@ -239,7 +242,7 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
   };
 
   // Prepare data for budget utilization stacked bar chart
-  const budgetChartData = {
+  const budgetChartData = useMemo(() => ({
     labels: filteredBudgetUtil.map((org: any) => org.organization_name),
     datasets: [
       {
@@ -271,7 +274,7 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
         borderWidth: 1
       }
     ]
-  };
+  }), [filteredBudgetUtil]);
 
   const budgetChartOptions = {
     responsive: true,

@@ -51,7 +51,7 @@ const AdminDashboard: React.FC = () => {
   const [mainTab, setMainTab] = useState<'plans' | 'reports'>('plans');
 
   // Plan sub-tabs
-  const [planSubTab, setPlansSubTab] = useState<'overview' | 'pending' | 'reviewed' | 'budget-activity' | 'analytics' | 'executive-performance'>('overview');
+  const [planSubTab, setPlansSubTab] = useState<'pending' | 'reviewed' | 'budget-activity' | 'analytics' | 'executive-performance'>('analytics');
 
   // Report sub-tabs
   const [reportSubTab, setReportSubTab] = useState<'performance-overview' | 'approved-reports' | 'budget-utilization'>('performance-overview');
@@ -210,7 +210,7 @@ const AdminDashboard: React.FC = () => {
         return { data: [] };
       }
     },
-    enabled: isAuthInitialized && mainTab === 'plans' && (allowedOrgIds.length > 0 || adminOrgType === 'MINISTER') && (planSubTab === 'budget-activity' || planSubTab === 'overview'),
+    enabled: isAuthInitialized && mainTab === 'plans' && (allowedOrgIds.length > 0 || adminOrgType === 'MINISTER') && (planSubTab === 'budget-activity' || planSubTab === 'analytics'),
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     retry: 1
@@ -301,8 +301,8 @@ const AdminDashboard: React.FC = () => {
 
   // Calculate budget totals directly from sub-activities
   const budgetTotals = useMemo(() => {
-    // Only compute when on overview tab
-    if (mainTab !== 'plans' || planSubTab !== 'overview') {
+    // Only compute when on analytics tab
+    if (mainTab !== 'plans' || planSubTab !== 'analytics') {
       return {
         totalBudget: 0,
         totalFunding: 0,
@@ -377,8 +377,8 @@ const AdminDashboard: React.FC = () => {
 
   // Calculate activity type budgets directly from sub-activities
   const calculateActivityTypeBudgets = useMemo(() => {
-    // Only compute when on overview tab
-    if (mainTab !== 'plans' || planSubTab !== 'overview') {
+    // Only compute when on analytics tab
+    if (mainTab !== 'plans' || planSubTab !== 'analytics') {
       return {
         Training: { count: 0, budget: 0 },
         Meeting: { count: 0, budget: 0 },
@@ -1172,14 +1172,14 @@ const AdminDashboard: React.FC = () => {
           <div className="border-b border-gray-200">
             <nav className="flex -mb-px space-x-6 overflow-x-auto">
               <button
-                onClick={() => setPlansSubTab('overview')}
+                onClick={() => setPlansSubTab('analytics')}
                 className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  planSubTab === 'overview'
+                  planSubTab === 'analytics'
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                Overview
+                Analytics
               </button>
               <button
                 onClick={() => setPlansSubTab('pending')}
@@ -1220,16 +1220,6 @@ const AdminDashboard: React.FC = () => {
                 }`}
               >
                 Budget by Activity
-              </button>
-              <button
-                onClick={() => setPlansSubTab('analytics')}
-                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  planSubTab === 'analytics'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Analytics
               </button>
               <button
                 onClick={() => setPlansSubTab('executive-performance')}
@@ -1289,315 +1279,6 @@ const AdminDashboard: React.FC = () => {
       {/* Plan Content */}
       {mainTab === 'plans' && (
         <>
-          {/* Overview Tab */}
-          {planSubTab === 'overview' && (
-            <div className="space-y-8">
-          {/* Top Statistics Cards - Plan Status */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-blue-100 text-sm font-medium">Total Plans</p>
-                  <p className="text-3xl font-bold">{totalPlans}</p>
-                  <p className="text-blue-100 text-xs">Submitted + Approved</p>
-                </div>
-                <ClipboardCheck className="h-12 w-12 text-blue-200" />
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-amber-100 text-sm font-medium">Pending Review</p>
-                  <p className="text-3xl font-bold">{pendingCount}</p>
-                  <p className="text-amber-100 text-xs">Awaiting evaluation</p>
-                </div>
-                <AlertCircle className="h-12 w-12 text-amber-200" />
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-green-100 text-sm font-medium">Approved</p>
-                  <p className="text-3xl font-bold">{approvedCount}</p>
-                  <p className="text-green-100 text-xs">Successfully reviewed</p>
-                </div>
-                <CheckCircle className="h-12 w-12 text-green-200" />
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-red-100 text-sm font-medium">Rejected</p>
-                  <p className="text-3xl font-bold">{rejectedCount}</p>
-                  <p className="text-red-100 text-xs">Needs revision</p>
-                </div>
-                <XCircle className="h-12 w-12 text-red-200" />
-              </div>
-            </div>
-          </div>
-
-          {/* Budget Overview Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-indigo-100 text-sm font-medium">Total Budget</p>
-                  <p className="text-2xl font-bold">{formatCurrency(budgetTotals.totalBudget)}</p>
-                  <p className="text-indigo-100 text-xs">All LEO/EO Plans</p>
-                </div>
-                <DollarSign className="h-10 w-10 text-indigo-200" />
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-emerald-100 text-sm font-medium">Available Funding</p>
-                  <p className="text-2xl font-bold">{formatCurrency(budgetTotals.totalFunding)}</p>
-                  <p className="text-emerald-100 text-xs">All sources combined</p>
-                </div>
-                <TrendingUp className="h-10 w-10 text-emerald-200" />
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-rose-500 to-rose-600 rounded-lg shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-rose-100 text-sm font-medium">Funding Gap</p>
-                  <p className="text-2xl font-bold">{formatCurrency(budgetTotals.fundingGap)}</p>
-                  <p className="text-rose-100 text-xs">Additional funding needed</p>
-                </div>
-                <AlertCircle className="h-10 w-10 text-rose-200" />
-              </div>
-            </div>
-          </div>
-
-          {/* Budget by Activity Type Cards */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Budget by Activity Type</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-              <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-lg shadow-md p-4 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <GraduationCap className="h-8 w-8 text-blue-100" />
-                  <span className="text-xs bg-blue-600 px-2 py-1 rounded-full">
-                    {calculateActivityTypeBudgets.Training.count}
-                  </span>
-                </div>
-                <h4 className="font-medium text-sm">Training</h4>
-                <p className="text-xs text-blue-100">{formatCurrency(calculateActivityTypeBudgets.Training.budget)}</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-green-400 to-green-500 rounded-lg shadow-md p-4 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <MessageSquare className="h-8 w-8 text-green-100" />
-                  <span className="text-xs bg-green-600 px-2 py-1 rounded-full">
-                    {calculateActivityTypeBudgets.Meeting.count}
-                  </span>
-                </div>
-                <h4 className="font-medium text-sm">Meeting</h4>
-                <p className="text-xs text-green-100">{formatCurrency(calculateActivityTypeBudgets.Meeting.budget)}</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-purple-400 to-purple-500 rounded-lg shadow-md p-4 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <Users className="h-8 w-8 text-purple-100" />
-                  <span className="text-xs bg-purple-600 px-2 py-1 rounded-full">
-                    {calculateActivityTypeBudgets.Workshop.count}
-                  </span>
-                </div>
-                <h4 className="font-medium text-sm">Workshop</h4>
-                <p className="text-xs text-purple-100">{formatCurrency(calculateActivityTypeBudgets.Workshop.budget)}</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-lg shadow-md p-4 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <Eye className="h-8 w-8 text-orange-100" />
-                  <span className="text-xs bg-orange-600 px-2 py-1 rounded-full">
-                    {calculateActivityTypeBudgets.Supervision.count}
-                  </span>
-                </div>
-                <h4 className="font-medium text-sm">Supervision</h4>
-                <p className="text-xs text-orange-100">{formatCurrency(calculateActivityTypeBudgets.Supervision.budget)}</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-teal-400 to-teal-500 rounded-lg shadow-md p-4 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <Package className="h-8 w-8 text-teal-100" />
-                  <span className="text-xs bg-teal-600 px-2 py-1 rounded-full">
-                    {calculateActivityTypeBudgets.Procurement.count}
-                  </span>
-                </div>
-                <h4 className="font-medium text-sm">Procurement</h4>
-                <p className="text-xs text-teal-100">{formatCurrency(calculateActivityTypeBudgets.Procurement.budget)}</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-pink-400 to-pink-500 rounded-lg shadow-md p-4 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <FileText className="h-8 w-8 text-pink-100" />
-                  <span className="text-xs bg-pink-600 px-2 py-1 rounded-full">
-                    {calculateActivityTypeBudgets.Printing.count}
-                  </span>
-                </div>
-                <h4 className="font-medium text-sm">Printing</h4>
-                <p className="text-xs text-pink-100">{formatCurrency(calculateActivityTypeBudgets.Printing.budget)}</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-gray-400 to-gray-500 rounded-lg shadow-md p-4 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <Wrench className="h-8 w-8 text-gray-100" />
-                  <span className="text-xs bg-gray-600 px-2 py-1 rounded-full">
-                    {calculateActivityTypeBudgets.Other.count}
-                  </span>
-                </div>
-                <h4 className="font-medium text-sm">Other</h4>
-                <p className="text-xs text-gray-100">{formatCurrency(calculateActivityTypeBudgets.Other.budget)}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Plan Status Distribution */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                <PieChart className="h-5 w-5 mr-2 text-blue-600" />
-                Plan Status Distribution
-              </h3>
-              <div className="h-64">
-                <Doughnut
-                  data={planStatusChartData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'bottom' as const,
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Budget & Funding Distribution */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                <DollarSign className="h-5 w-5 mr-2 text-green-600" />
-                Budget & Funding Distribution
-              </h3>
-              <div className="h-64">
-                <Doughnut
-                  data={budgetDistributionChartData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'bottom' as const,
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Monthly Submission Trends */}
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-              <TrendingUp className="h-5 w-5 mr-2 text-purple-600" />
-              Monthly Submission Trends
-            </h3>
-            <div className="h-80">
-              <Line
-                data={monthlyTrendsChartData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  interaction: {
-                    mode: 'index' as const,
-                    intersect: false,
-                  },
-                  scales: {
-                    x: {
-                      display: true,
-                      title: {
-                        display: true,
-                        text: 'Month'
-                      }
-                    },
-                    y: {
-                      type: 'linear' as const,
-                      display: true,
-                      position: 'left' as const,
-                      title: {
-                        display: true,
-                        text: 'Number of Submissions'
-                      }
-                    },
-                    y1: {
-                      type: 'linear' as const,
-                      display: true,
-                      position: 'right' as const,
-                      title: {
-                        display: true,
-                        text: 'Budget Amount (ETB)'
-                      },
-                      grid: {
-                        drawOnChartArea: false,
-                      },
-                    }
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Top Organizations by Plan Activity */}
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-              <BarChart3 className="h-5 w-5 mr-2 text-indigo-600" />
-              Top Executives by Plan Activity
-            </h3>
-            <div className="h-80">
-              <Bar
-                data={orgPerformanceChartData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    y: {
-                      type: 'linear' as const,
-                      display: true,
-                      position: 'left' as const,
-                      title: {
-                        display: true,
-                        text: 'Number of Plans'
-                      }
-                    },
-                    y1: {
-                      type: 'linear' as const,
-                      display: true,
-                      position: 'right' as const,
-                      title: {
-                        display: true,
-                        text: 'Budget Amount (ETB)'
-                      },
-                      grid: {
-                        drawOnChartArea: false,
-                      },
-                    }
-                  }
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Pending Reviews Tab */}
           {planSubTab === 'pending' && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
