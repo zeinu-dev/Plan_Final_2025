@@ -1354,7 +1354,7 @@ class PlanViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """Filter plans based on user's role and organization"""
+        """Filter plans based on user's role and organization hierarchy"""
         queryset = super().get_queryset()
         user = self.request.user
 
@@ -1394,12 +1394,34 @@ class PlanViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(organization__in=org_ids)
             logger.info(f"Filtering by organizations: {org_ids}")
 
-        # Admins can see all plans
+        # Helper function to get all child organizations recursively
+        def get_child_organizations(parent_org_id):
+            child_ids = [parent_org_id]
+
+            def get_descendants(org_id):
+                children = Organization.objects.filter(parent_id=org_id).values_list('id', flat=True)
+                for child_id in children:
+                    if child_id not in child_ids:
+                        child_ids.append(child_id)
+                        get_descendants(child_id)
+
+            get_descendants(parent_org_id)
+            return child_ids
+
+        # Admins can see plans from their organization hierarchy
         if 'ADMIN' in user_roles:
-            logger.info(f"Admin {user.username} accessing all plans")
+            admin_org = user_organizations.first().organization
+            admin_org_id = admin_org.id
+            admin_org_type = admin_org.type
+
+            # Get all child organizations in the hierarchy
+            allowed_org_ids = get_child_organizations(admin_org_id)
+
+            queryset = queryset.filter(organization__in=allowed_org_ids)
+            logger.info(f"Admin {user.username} accessing plans from organization hierarchy: {allowed_org_ids}")
             return queryset
 
-        # Evaluators can see plans from their organizations
+        # Evaluators can see all plans (no hierarchy filtering)
         if 'EVALUATOR' in user_roles:
             if show_all:
                 logger.info(f"Evaluator {user.username} accessing all plans for statistics")
@@ -1967,7 +1989,29 @@ class ReportViewSet(viewsets.ModelViewSet):
         if report_type:
             queryset = queryset.filter(report_type=report_type)
 
+        # Helper function to get all child organizations recursively
+        def get_child_organizations(parent_org_id):
+            child_ids = [parent_org_id]
+
+            def get_descendants(org_id):
+                children = Organization.objects.filter(parent_id=org_id).values_list('id', flat=True)
+                for child_id in children:
+                    if child_id not in child_ids:
+                        child_ids.append(child_id)
+                        get_descendants(child_id)
+
+            get_descendants(parent_org_id)
+            return child_ids
+
         if 'ADMIN' in user_roles:
+            admin_org = user_organizations.first().organization
+            admin_org_id = admin_org.id
+
+            # Get all child organizations in the hierarchy
+            allowed_org_ids = get_child_organizations(admin_org_id)
+
+            queryset = queryset.filter(organization__in=allowed_org_ids)
+            logger.info(f"Admin {user.username} accessing reports from organization hierarchy: {allowed_org_ids}")
             return queryset
 
         return queryset.filter(organization__in=user_org_ids)
