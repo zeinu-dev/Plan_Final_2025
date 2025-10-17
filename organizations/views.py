@@ -3316,8 +3316,8 @@ def budget_by_activity_summary(request):
 
         # Get sub-activities for approved plans
         sub_activities = SubActivity.objects.filter(
-            main_activity__initiative__objective__plan_id__in=plan_to_org.keys()
-        ).values('main_activity__initiative__objective__plan_id', 'activity_type').annotate(
+            main_activity__initiative__strategic_objective__plan__id__in=plan_to_org.keys()
+        ).values('main_activity__initiative__strategic_objective__plan__id', 'activity_type').annotate(
             count=Count('id'),
             with_tool_sum=Sum(
                 Case(
@@ -3342,7 +3342,7 @@ def budget_by_activity_summary(request):
 
         # Populate data
         for item in sub_activities:
-            plan_id = item['main_activity__initiative__objective__plan_id']
+            plan_id = item['main_activity__initiative__strategic_objective__plan__id']
             if plan_id not in plan_to_org:
                 continue
 
@@ -3413,8 +3413,8 @@ def executive_performance_summary(request):
 
         # Get budget data for approved plans
         budget_data = SubActivity.objects.filter(
-            main_activity__initiative__objective__plan_id__in=plan_to_org.keys()
-        ).values('main_activity__initiative__objective__plan_id').annotate(
+            main_activity__initiative__strategic_objective__plan__id__in=plan_to_org.keys()
+        ).values('main_activity__initiative__strategic_objective__plan__id').annotate(
             total_cost=Sum(
                 Case(
                     When(budget_calculation_type='WITH_TOOL', then=F('estimated_cost_with_tool')),
@@ -3434,7 +3434,7 @@ def executive_performance_summary(request):
 
         # Populate budget data
         for item in budget_data:
-            plan_id = item['main_activity__initiative__objective__plan_id']
+            plan_id = item['main_activity__initiative__strategic_objective__plan__id']
             if plan_id not in plan_to_org:
                 continue
 
