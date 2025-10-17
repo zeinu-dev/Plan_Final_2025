@@ -3297,18 +3297,25 @@ def budget_by_activity_summary(request):
         from django.db.models import Q, Sum, Count, Case, When, DecimalField, F
         from decimal import Decimal
 
-        # Aggregate sub-activities by organization and activity type for APPROVED plans only
-        # SubActivity -> MainActivity -> StrategicInitiative -> Program -> Plan -> Organization
+        # Get approved plans
+        approved_plans = Plan.objects.filter(status='APPROVED').select_related('organization').values(
+            'program_id', 'organization_id', 'organization__name', 'organization__code'
+        ).distinct()
+
+        # Create mapping of program to organization
+        program_to_org = {}
+        for plan in approved_plans:
+            if plan['program_id'] and plan['program_id'] not in program_to_org:
+                program_to_org[plan['program_id']] = {
+                    'org_id': plan['organization_id'],
+                    'org_name': plan['organization__name'],
+                    'org_code': plan['organization__code']
+                }
+
+        # Get sub-activities for approved programs
         sub_activities = SubActivity.objects.filter(
-            main_activity__initiative__program__plan__status='APPROVED'
-        ).select_related(
-            'main_activity__initiative__program__plan__organization'
-        ).values(
-            'main_activity__initiative__program__plan__organization_id',
-            'main_activity__initiative__program__plan__organization__name',
-            'main_activity__initiative__program__plan__organization__code',
-            'activity_type'
-        ).annotate(
+            main_activity__initiative__program_id__in=program_to_org.keys()
+        ).values('main_activity__initiative__program_id', 'activity_type').annotate(
             count=Count('id'),
             with_tool_sum=Sum(
                 Case(
@@ -3331,13 +3338,18 @@ def budget_by_activity_summary(request):
 
         # Populate data
         for item in sub_activities:
-            org_id = item['main_activity__initiative__program__plan__organization_id']
+            program_id = item['main_activity__initiative__program_id']
+            if program_id not in program_to_org:
+                continue
+
+            org_info = program_to_org[program_id]
+            org_id = org_info['org_id']
 
             if org_id not in org_map:
                 org_map[org_id] = {
                     'organization_id': org_id,
-                    'organization_name': item['main_activity__initiative__program__plan__organization__name'] or f'ORG-{org_id}',
-                    'organization_code': item['main_activity__initiative__program__plan__organization__code'] or f'ORG-{org_id:04d}',
+                    'organization_name': org_info['org_name'] or f'ORG-{org_id}',
+                    'organization_code': org_info['org_code'] or f'ORG-{org_id:04d}',
                     'Meeting / Workshop': {'count': 0, 'budget': 0},
                     'Training': {'count': 0, 'budget': 0},
                     'Supervision': {'count': 0, 'budget': 0},
@@ -3378,17 +3390,25 @@ def executive_performance_summary(request):
         from django.db.models import Q, Sum, Count, Case, When, DecimalField, F
         from decimal import Decimal
 
-        # Aggregate budget data by organization for APPROVED plans only
-        # SubActivity -> MainActivity -> StrategicInitiative -> Program -> Plan -> Organization
+        # Get approved plans
+        approved_plans = Plan.objects.filter(status='APPROVED').select_related('organization').values(
+            'program_id', 'organization_id', 'organization__name', 'organization__code'
+        ).distinct()
+
+        # Create mapping of program to organization
+        program_to_org = {}
+        for plan in approved_plans:
+            if plan['program_id'] and plan['program_id'] not in program_to_org:
+                program_to_org[plan['program_id']] = {
+                    'org_id': plan['organization_id'],
+                    'org_name': plan['organization__name'],
+                    'org_code': plan['organization__code']
+                }
+
+        # Get budget data for approved programs
         budget_data = SubActivity.objects.filter(
-            main_activity__initiative__program__plan__status='APPROVED'
-        ).select_related(
-            'main_activity__initiative__program__plan__organization'
-        ).values(
-            'main_activity__initiative__program__plan__organization_id',
-            'main_activity__initiative__program__plan__organization__name',
-            'main_activity__initiative__program__plan__organization__code'
-        ).annotate(
+            main_activity__initiative__program_id__in=program_to_org.keys()
+        ).values('main_activity__initiative__program_id').annotate(
             total_cost=Sum(
                 Case(
                     When(budget_calculation_type='WITH_TOOL', then=F('estimated_cost_with_tool')),
@@ -3408,13 +3428,18 @@ def executive_performance_summary(request):
 
         # Populate budget data
         for item in budget_data:
-            org_id = item['main_activity__initiative__program__plan__organization_id']
+            program_id = item['main_activity__initiative__program_id']
+            if program_id not in program_to_org:
+                continue
+
+            org_info = program_to_org[program_id]
+            org_id = org_info['org_id']
 
             if org_id not in org_performance:
                 org_performance[org_id] = {
                     'organization_id': org_id,
-                    'organization_name': item['main_activity__initiative__program__plan__organization__name'] or f'ORG-{org_id}',
-                    'organization_code': item['main_activity__initiative__program__plan__organization__code'] or f'ORG-{org_id:04d}',
+                    'organization_name': org_info['org_name'] or f'ORG-{org_id}',
+                    'organization_code': org_info['org_code'] or f'ORG-{org_id:04d}',
                     'total_plans': 0,
                     'approved': 0,
                     'submitted': 0,
