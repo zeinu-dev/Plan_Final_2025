@@ -3297,18 +3297,16 @@ def budget_by_activity_summary(request):
         from django.db.models import Q, Sum, Count, Case, When, DecimalField, F
         from decimal import Decimal
 
-        # Get approved plans first
-        approved_org_ids = Plan.objects.filter(
-            status='APPROVED'
-        ).values_list('organization_id', flat=True).distinct()
-
         # Aggregate sub-activities by organization and activity type for APPROVED plans only
+        # SubActivity -> MainActivity -> StrategicInitiative -> Program -> Plan -> Organization
         sub_activities = SubActivity.objects.filter(
-            organization_id__in=approved_org_ids
-        ).select_related('organization').values(
-            'organization_id',
-            'organization__name',
-            'organization__code',
+            main_activity__initiative__program__plan__status='APPROVED'
+        ).select_related(
+            'main_activity__initiative__program__plan__organization'
+        ).values(
+            'main_activity__initiative__program__plan__organization_id',
+            'main_activity__initiative__program__plan__organization__name',
+            'main_activity__initiative__program__plan__organization__code',
             'activity_type'
         ).annotate(
             count=Count('id'),
@@ -3333,13 +3331,13 @@ def budget_by_activity_summary(request):
 
         # Populate data
         for item in sub_activities:
-            org_id = item['organization_id']
+            org_id = item['main_activity__initiative__program__plan__organization_id']
 
             if org_id not in org_map:
                 org_map[org_id] = {
                     'organization_id': org_id,
-                    'organization_name': item['organization__name'] or f'ORG-{org_id}',
-                    'organization_code': item['organization__code'] or f'ORG-{org_id:04d}',
+                    'organization_name': item['main_activity__initiative__program__plan__organization__name'] or f'ORG-{org_id}',
+                    'organization_code': item['main_activity__initiative__program__plan__organization__code'] or f'ORG-{org_id:04d}',
                     'Meeting / Workshop': {'count': 0, 'budget': 0},
                     'Training': {'count': 0, 'budget': 0},
                     'Supervision': {'count': 0, 'budget': 0},
@@ -3380,18 +3378,16 @@ def executive_performance_summary(request):
         from django.db.models import Q, Sum, Count, Case, When, DecimalField, F
         from decimal import Decimal
 
-        # Get approved plans first
-        approved_org_ids = Plan.objects.filter(
-            status='APPROVED'
-        ).values_list('organization_id', flat=True).distinct()
-
         # Aggregate budget data by organization for APPROVED plans only
+        # SubActivity -> MainActivity -> StrategicInitiative -> Program -> Plan -> Organization
         budget_data = SubActivity.objects.filter(
-            organization_id__in=approved_org_ids
-        ).select_related('organization').values(
-            'organization_id',
-            'organization__name',
-            'organization__code'
+            main_activity__initiative__program__plan__status='APPROVED'
+        ).select_related(
+            'main_activity__initiative__program__plan__organization'
+        ).values(
+            'main_activity__initiative__program__plan__organization_id',
+            'main_activity__initiative__program__plan__organization__name',
+            'main_activity__initiative__program__plan__organization__code'
         ).annotate(
             total_cost=Sum(
                 Case(
@@ -3412,13 +3408,13 @@ def executive_performance_summary(request):
 
         # Populate budget data
         for item in budget_data:
-            org_id = item['organization_id']
+            org_id = item['main_activity__initiative__program__plan__organization_id']
 
             if org_id not in org_performance:
                 org_performance[org_id] = {
                     'organization_id': org_id,
-                    'organization_name': item['organization__name'] or f'ORG-{org_id}',
-                    'organization_code': item['organization__code'] or f'ORG-{org_id:04d}',
+                    'organization_name': item['main_activity__initiative__program__plan__organization__name'] or f'ORG-{org_id}',
+                    'organization_code': item['main_activity__initiative__program__plan__organization__code'] or f'ORG-{org_id:04d}',
                     'total_plans': 0,
                     'approved': 0,
                     'submitted': 0,
