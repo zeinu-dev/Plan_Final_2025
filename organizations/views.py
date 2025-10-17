@@ -2787,7 +2787,7 @@ def report_statistics(request):
             return child_ids
 
         # Determine user's allowed organizations based on role
-        user_orgs = request.user.userorganization_set.all()
+        user_orgs = request.user.organization_users.all()
         allowed_org_ids = None  # Default: no filtering (show all)
 
         if user_orgs.exists():

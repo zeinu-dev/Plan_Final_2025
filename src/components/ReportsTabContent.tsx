@@ -27,8 +27,15 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
       setLoading(true);
       const data = await reports.getStatistics();
       setReportStats(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load report statistics:', error);
+      console.error('Error response:', error?.response?.data);
+      console.error('Error details:', {
+        message: error?.message,
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        data: error?.response?.data
+      });
     } finally {
       setLoading(false);
     }
