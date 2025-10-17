@@ -3299,7 +3299,7 @@ def budget_by_activity_summary(request):
 
         # Get approved plans
         approved_plans = Plan.objects.filter(status='APPROVED').select_related('organization').values(
-            'program_id', 'organization_id', 'organization__name', 'organization__code'
+            'program_id', 'organization_id', 'organization__name'
         ).distinct()
 
         # Create mapping of program to organization
@@ -3308,8 +3308,7 @@ def budget_by_activity_summary(request):
             if plan['program_id'] and plan['program_id'] not in program_to_org:
                 program_to_org[plan['program_id']] = {
                     'org_id': plan['organization_id'],
-                    'org_name': plan['organization__name'],
-                    'org_code': plan['organization__code']
+                    'org_name': plan['organization__name']
                 }
 
         # Get sub-activities for approved programs
@@ -3349,7 +3348,7 @@ def budget_by_activity_summary(request):
                 org_map[org_id] = {
                     'organization_id': org_id,
                     'organization_name': org_info['org_name'] or f'ORG-{org_id}',
-                    'organization_code': org_info['org_code'] or f'ORG-{org_id:04d}',
+                    'organization_code': f'ORG-{org_id:04d}',
                     'Meeting / Workshop': {'count': 0, 'budget': 0},
                     'Training': {'count': 0, 'budget': 0},
                     'Supervision': {'count': 0, 'budget': 0},
@@ -3392,7 +3391,7 @@ def executive_performance_summary(request):
 
         # Get approved plans
         approved_plans = Plan.objects.filter(status='APPROVED').select_related('organization').values(
-            'program_id', 'organization_id', 'organization__name', 'organization__code'
+            'program_id', 'organization_id', 'organization__name'
         ).distinct()
 
         # Create mapping of program to organization
@@ -3401,8 +3400,7 @@ def executive_performance_summary(request):
             if plan['program_id'] and plan['program_id'] not in program_to_org:
                 program_to_org[plan['program_id']] = {
                     'org_id': plan['organization_id'],
-                    'org_name': plan['organization__name'],
-                    'org_code': plan['organization__code']
+                    'org_name': plan['organization__name']
                 }
 
         # Get budget data for approved programs
