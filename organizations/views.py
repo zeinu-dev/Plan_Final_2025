@@ -3302,6 +3302,8 @@ def budget_by_activity_summary(request):
             'program_id', 'organization_id', 'organization__name'
         ).distinct()
 
+        logger.info(f"Found {len(approved_plans)} approved plans")
+
         # Create mapping of program to organization
         program_to_org = {}
         for plan in approved_plans:
@@ -3310,6 +3312,8 @@ def budget_by_activity_summary(request):
                     'org_id': plan['organization_id'],
                     'org_name': plan['organization__name']
                 }
+
+        logger.info(f"Program to org mapping has {len(program_to_org)} programs")
 
         # Get sub-activities for approved programs
         sub_activities = SubActivity.objects.filter(
@@ -3334,6 +3338,8 @@ def budget_by_activity_summary(request):
 
         # Create organization map
         org_map = {}
+
+        logger.info(f"Found {len(sub_activities)} sub-activity groups")
 
         # Populate data
         for item in sub_activities:
@@ -3394,6 +3400,8 @@ def executive_performance_summary(request):
             'program_id', 'organization_id', 'organization__name'
         ).distinct()
 
+        logger.info(f"Executive perf: Found {len(approved_plans)} approved plans")
+
         # Create mapping of program to organization
         program_to_org = {}
         for plan in approved_plans:
@@ -3402,6 +3410,8 @@ def executive_performance_summary(request):
                     'org_id': plan['organization_id'],
                     'org_name': plan['organization__name']
                 }
+
+        logger.info(f"Executive perf: Program to org mapping has {len(program_to_org)} programs")
 
         # Get budget data for approved programs
         budget_data = SubActivity.objects.filter(
@@ -3437,7 +3447,7 @@ def executive_performance_summary(request):
                 org_performance[org_id] = {
                     'organization_id': org_id,
                     'organization_name': org_info['org_name'] or f'ORG-{org_id}',
-                    'organization_code': org_info['org_code'] or f'ORG-{org_id:04d}',
+                    'organization_code': f'ORG-{org_id:04d}',
                     'total_plans': 0,
                     'approved': 0,
                     'submitted': 0,
