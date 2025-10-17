@@ -41,6 +41,52 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
     }
   };
 
+  // Prepare data for performance bar chart - aggregate by organization
+  // This must be called before any conditional returns to follow hooks rules
+  const organizationPerformance = useMemo(() => {
+    if (!reportStats?.objective_achievements_by_org) return [];
+
+    const objective_achievements_by_org = reportStats.objective_achievements_by_org;
+    const filteredObjectives = selectedOrg === 'all'
+      ? objective_achievements_by_org
+      : objective_achievements_by_org.filter((org: any) => org.organization_id.toString() === selectedOrg);
+
+    const performance: Array<{
+      name: string;
+      code: string;
+      totalPercentage: number;
+      color: string;
+      objectiveCount: number;
+    }> = [];
+
+    filteredObjectives.forEach((org: any) => {
+      // Calculate average percentage across all objectives for this organization
+      const totalPercentage = org.objectives.reduce((sum: number, obj: any) => sum + obj.achievement_percentage, 0);
+      const avgPercentage = org.objectives.length > 0 ? totalPercentage / org.objectives.length : 0;
+
+      // Determine color based on average percentage
+      let color = '#F2250A';  // Red (default)
+      if (avgPercentage >= 100) {
+        color = '#14A800';  // Green
+      } else if (avgPercentage >= 75) {
+        color = '#F7B500';  // Yellow
+      }
+
+      performance.push({
+        name: org.organization_name,
+        code: org.organization_code || org.organization_name.substring(0, 3).toUpperCase(),
+        totalPercentage: Math.round(avgPercentage * 100) / 100,
+        color: color,
+        objectiveCount: org.objectives.length
+      });
+    });
+
+    // Sort by performance descending
+    performance.sort((a, b) => b.totalPercentage - a.totalPercentage);
+
+    return performance;
+  }, [reportStats, selectedOrg]);
+
   const handleViewMEReport = async (report: any) => {
     try {
       setLoadingMEReport(true);
@@ -169,47 +215,6 @@ const ReportsTabContent: React.FC<ReportsTabContentProps> = ({ reportSubTab }) =
     id: org.organization_id,
     name: org.organization_name
   })) || [];
-
-  // Prepare data for performance bar chart - aggregate by organization
-  const organizationPerformance = useMemo(() => {
-    const performance: Array<{
-      name: string;
-      code: string;
-      totalPercentage: number;
-      color: string;
-      objectiveCount: number;
-    }> = [];
-
-    filteredObjectives.forEach((org: any) => {
-      // Calculate average percentage across all objectives for this organization
-      const totalPercentage = org.objectives.reduce((sum: number, obj: any) => sum + obj.achievement_percentage, 0);
-      const avgPercentage = org.objectives.length > 0 ? totalPercentage / org.objectives.length : 0;
-
-      // Determine color based on average percentage
-      let color = '#F2250A';  // Red (default)
-      if (avgPercentage >= 95) {
-        color = '#00A300';  // Dark Green
-      } else if (avgPercentage >= 80) {
-        color = '#93C572';  // Light Green
-      } else if (avgPercentage >= 65) {
-        color = '#FFFF00';  // Dark Yellow
-      } else if (avgPercentage >= 55) {
-        color = '#FFBF00';  // Light Yellow
-      }
-
-      performance.push({
-        name: org.organization_name,
-        code: org.organization_code || `ORG-${org.organization_id}`,
-        totalPercentage: avgPercentage,
-        color: color,
-        objectiveCount: org.objectives.length
-      });
-    });
-
-    // Sort by percentage descending
-    performance.sort((a, b) => b.totalPercentage - a.totalPercentage);
-    return performance;
-  }, [filteredObjectives]);
 
   const performanceChartData = useMemo(() => ({
     labels: organizationPerformance.map(org => `${org.code} - ${org.name}`),
