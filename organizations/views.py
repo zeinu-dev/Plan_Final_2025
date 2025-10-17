@@ -3297,33 +3297,14 @@ def budget_by_activity_summary(request):
         from django.db.models import Q, Sum, Count, Case, When, DecimalField, F
         from decimal import Decimal
 
-        # Get all approved and submitted plans
-        plans = Plan.objects.filter(
-            status__in=['SUBMITTED', 'APPROVED']
-        ).values_list('organization_id', 'organization__name', 'organization__code')
-
-        # Create organization lookup
-        org_map = {}
-        for org_id, org_name, org_code in plans:
-            if org_id not in org_map:
-                org_map[org_id] = {
-                    'organization_id': org_id,
-                    'organization_name': org_name or f'ORG-{org_id}',
-                    'organization_code': org_code or f'ORG-{org_id:04d}',
-                    'Meeting / Workshop': {'count': 0, 'budget': 0},
-                    'Training': {'count': 0, 'budget': 0},
-                    'Supervision': {'count': 0, 'budget': 0},
-                    'Procurement': {'count': 0, 'budget': 0},
-                    'Printing': {'count': 0, 'budget': 0},
-                    'Other': {'count': 0, 'budget': 0},
-                    'total_count': 0,
-                    'total_budget': 0
-                }
-
         # Aggregate sub-activities by organization and activity type
-        sub_activities = SubActivity.objects.filter(
-            organization_id__in=org_map.keys()
-        ).values('organization_id', 'activity_type').annotate(
+        # Don't filter by plans - get ALL sub-activities
+        sub_activities = SubActivity.objects.select_related('organization').values(
+            'organization_id',
+            'organization__name',
+            'organization__code',
+            'activity_type'
+        ).annotate(
             count=Count('id'),
             with_tool_sum=Sum(
                 Case(
@@ -3341,14 +3322,33 @@ def budget_by_activity_summary(request):
             )
         )
 
+        # Create organization map
+        org_map = {}
+
         # Populate data
         for item in sub_activities:
             org_id = item['organization_id']
+
+            if org_id not in org_map:
+                org_map[org_id] = {
+                    'organization_id': org_id,
+                    'organization_name': item['organization__name'] or f'ORG-{org_id}',
+                    'organization_code': item['organization__code'] or f'ORG-{org_id:04d}',
+                    'Meeting / Workshop': {'count': 0, 'budget': 0},
+                    'Training': {'count': 0, 'budget': 0},
+                    'Supervision': {'count': 0, 'budget': 0},
+                    'Procurement': {'count': 0, 'budget': 0},
+                    'Printing': {'count': 0, 'budget': 0},
+                    'Other': {'count': 0, 'budget': 0},
+                    'total_count': 0,
+                    'total_budget': 0
+                }
+
             activity_type = item['activity_type'] or 'Other'
             count = item['count']
             budget = float(item['with_tool_sum'] or 0) + float(item['without_tool_sum'] or 0)
 
-            if org_id in org_map and activity_type in org_map[org_id]:
+            if activity_type in org_map[org_id]:
                 org_map[org_id][activity_type]['count'] = count
                 org_map[org_id][activity_type]['budget'] = budget
                 org_map[org_id]['total_count'] += count
@@ -3374,17 +3374,33 @@ def executive_performance_summary(request):
         from django.db.models import Q, Sum, Count, Case, When, DecimalField, F
         from decimal import Decimal
 
-        # Get all approved and submitted plans with counts
-        plans_data = Plan.objects.filter(
-            status__in=['SUBMITTED', 'APPROVED']
-        ).values('organization_id', 'organization__name', 'organization__code', 'status').annotate(
-            count=Count('id')
+        # Aggregate budget data by organization - get ALL organizations with sub-activities
+        budget_data = SubActivity.objects.select_related('organization').values(
+            'organization_id',
+            'organization__name',
+            'organization__code'
+        ).annotate(
+            total_cost=Sum(
+                Case(
+                    When(budget_calculation_type='WITH_TOOL', then=F('estimated_cost_with_tool')),
+                    When(budget_calculation_type='WITHOUT_TOOL', then=F('estimated_cost_without_tool')),
+                    default=0,
+                    output_field=DecimalField()
+                )
+            ),
+            gov_funding=Sum('government_treasury'),
+            partners_funding=Sum('partners_funding'),
+            sdg_funding=Sum('sdg_funding'),
+            other_funding=Sum('other_funding')
         )
 
         # Create organization performance map
         org_performance = {}
-        for item in plans_data:
+
+        # Populate budget data
+        for item in budget_data:
             org_id = item['organization_id']
+
             if org_id not in org_performance:
                 org_performance[org_id] = {
                     'organization_id': org_id,
@@ -3401,47 +3417,36 @@ def executive_performance_summary(request):
                     'funding_gap': 0
                 }
 
-            org_performance[org_id]['total_plans'] += item['count']
-            if item['status'] == 'APPROVED':
-                org_performance[org_id]['approved'] += item['count']
-            elif item['status'] == 'SUBMITTED':
-                org_performance[org_id]['submitted'] += item['count']
+            total_cost = float(item['total_cost'] or 0)
+            gov = float(item['gov_funding'] or 0)
+            partners = float(item['partners_funding'] or 0)
+            sdg = float(item['sdg_funding'] or 0)
+            other = float(item['other_funding'] or 0)
+            total_funding = gov + partners + sdg + other
 
-        # Aggregate budget data by organization
-        budget_data = SubActivity.objects.filter(
+            org_performance[org_id]['total_budget'] = total_cost
+            org_performance[org_id]['available_funding'] = total_funding
+            org_performance[org_id]['government_budget'] = gov
+            org_performance[org_id]['sdg_budget'] = sdg
+            org_performance[org_id]['partners_budget'] = partners
+            org_performance[org_id]['funding_gap'] = max(0, total_cost - total_funding)
+
+        # Get plan counts for each organization
+        plans_data = Plan.objects.filter(
+            status__in=['SUBMITTED', 'APPROVED'],
             organization_id__in=org_performance.keys()
-        ).values('organization_id').annotate(
-            total_cost=Sum(
-                Case(
-                    When(budget_calculation_type='WITH_TOOL', then=F('estimated_cost_with_tool')),
-                    When(budget_calculation_type='WITHOUT_TOOL', then=F('estimated_cost_without_tool')),
-                    default=0,
-                    output_field=DecimalField()
-                )
-            ),
-            gov_funding=Sum('government_treasury'),
-            partners_funding=Sum('partners_funding'),
-            sdg_funding=Sum('sdg_funding'),
-            other_funding=Sum('other_funding')
+        ).values('organization_id', 'status').annotate(
+            count=Count('id')
         )
 
-        # Populate budget data
-        for item in budget_data:
+        for item in plans_data:
             org_id = item['organization_id']
             if org_id in org_performance:
-                total_cost = float(item['total_cost'] or 0)
-                gov = float(item['gov_funding'] or 0)
-                partners = float(item['partners_funding'] or 0)
-                sdg = float(item['sdg_funding'] or 0)
-                other = float(item['other_funding'] or 0)
-                total_funding = gov + partners + sdg + other
-
-                org_performance[org_id]['total_budget'] = total_cost
-                org_performance[org_id]['available_funding'] = total_funding
-                org_performance[org_id]['government_budget'] = gov
-                org_performance[org_id]['sdg_budget'] = sdg
-                org_performance[org_id]['partners_budget'] = partners
-                org_performance[org_id]['funding_gap'] = max(0, total_cost - total_funding)
+                org_performance[org_id]['total_plans'] += item['count']
+                if item['status'] == 'APPROVED':
+                    org_performance[org_id]['approved'] += item['count']
+                elif item['status'] == 'SUBMITTED':
+                    org_performance[org_id]['submitted'] += item['count']
 
         return Response({
             'data': list(org_performance.values())
