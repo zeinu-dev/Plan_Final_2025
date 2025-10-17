@@ -266,6 +266,7 @@ const AdminDashboard: React.FC = () => {
   // Budget by activity type data for table
   const budgetByActivityData = useMemo(() => {
     if (budgetByActivityResponse?.data) {
+      console.log('Budget by activity response:', budgetByActivityResponse);
       // Use optimized backend data
       return budgetByActivityResponse.data.map((org: any) => ({
         organizationName: org.organization_name,
@@ -322,6 +323,7 @@ const AdminDashboard: React.FC = () => {
   // Executive performance data
   const executivePerformanceData = useMemo(() => {
     if (executivePerformanceResponse?.data) {
+      console.log('Executive performance response:', executivePerformanceResponse);
       // Use optimized backend data
       return executivePerformanceResponse.data.map((org: any) => ({
         organizationName: org.organization_name,
