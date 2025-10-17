@@ -1786,6 +1786,17 @@ export const plans = {
       console.error('Failed to get pending reviews:', error);
       throw error;
     }
+  },
+
+  async getAdminAnalytics() {
+    try {
+      await ensureCsrfToken();
+      const response = await api.get('/plans/admin-analytics/');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get admin analytics:', error);
+      throw error;
+    }
   }
 };
 

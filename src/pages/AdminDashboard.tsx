@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Shield, Users, CheckCircle, XCircle, AlertCircle, Loader, RefreshCw,
   Building2, DollarSign, TrendingUp, BarChart3, PieChart, Calendar,
   Eye, ClipboardCheck, Search, ChevronLeft, ChevronRight, Filter,
-  Activity, Briefcase, GraduationCap, MessageSquare, Wrench, FileText, Package
+  Activity, Briefcase, FileText
 } from 'lucide-react';
 import { useLanguage } from '../lib/i18n/LanguageContext';
-import { organizations, auth, api, reports } from '../lib/api';
+import { organizations, auth, api, plans } from '../lib/api';
 import { format } from 'date-fns';
 import { isAdmin } from '../types/user';
-import { Bar, Doughnut, Line } from 'react-chartjs-2';
+import { Bar, Doughnut } from 'react-chartjs-2';
 import ReportsTabContent from '../components/ReportsTabContent';
 import {
   Chart as ChartJS,
@@ -21,39 +21,18 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
-  Title,
-  PointElement,
-  LineElement,
-  Filler
+  Title
 } from 'chart.js';
 
-// Register Chart.js components
-ChartJS.register(
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  PointElement,
-  LineElement,
-  Filler
-);
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
 const AdminDashboard: React.FC = () => {
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
-  // Main tabs
   const [mainTab, setMainTab] = useState<'plans' | 'reports'>('plans');
-
-  // Plan sub-tabs
   const [planSubTab, setPlansSubTab] = useState<'pending' | 'reviewed' | 'budget-activity' | 'analytics' | 'executive-performance'>('analytics');
-
-  // Report sub-tabs
   const [reportSubTab, setReportSubTab] = useState<'performance-overview' | 'approved-reports' | 'budget-utilization'>('performance-overview');
 
   const [reviewedFilter, setReviewedFilter] = useState('all');
@@ -67,21 +46,12 @@ const AdminDashboard: React.FC = () => {
   const [pendingOrgFilter, setPendingOrgFilter] = useState('all');
   const [pendingSortBy, setPendingSortBy] = useState<'date' | 'organization' | 'planner'>('date');
   const [pendingSortOrder, setPendingSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [budgetActivityCurrentPage, setBudgetActivityCurrentPage] = useState(1);
-  const [executiveCurrentPage, setExecutiveCurrentPage] = useState(1);
   const reviewedItemsPerPage = 10;
   const pendingItemsPerPage = 10;
-  const budgetActivityItemsPerPage = 10;
-  const executiveItemsPerPage = 10;
 
-  // Organization hierarchy state
   const [organizationsMap, setOrganizationsMap] = useState<Record<string, string>>({});
-  const [adminOrgId, setAdminOrgId] = useState<number | null>(null);
-  const [adminOrgType, setAdminOrgType] = useState<string | null>(null);
-  const [allowedOrgIds, setAllowedOrgIds] = useState<number[]>([]);
   const [isAuthInitialized, setIsAuthInitialized] = useState(false);
 
-  // Check if user has admin permissions
   useEffect(() => {
     const initializeAdminAccess = async () => {
       try {
@@ -96,12 +66,6 @@ const AdminDashboard: React.FC = () => {
           return;
         }
 
-        // Get admin's organization ID and type
-        if (authData.userOrganizations && authData.userOrganizations.length > 0) {
-          const adminOrg = authData.userOrganizations[0].organization;
-          setAdminOrgId(adminOrg);
-        }
-
         setIsAuthInitialized(true);
       } catch (error) {
         setError('Failed to verify admin permissions');
@@ -111,198 +75,69 @@ const AdminDashboard: React.FC = () => {
     initializeAdminAccess();
   }, [navigate]);
 
-  // Fetch organizations and determine hierarchy access
   useEffect(() => {
-    const setupOrganizationHierarchy = async () => {
-      if (!adminOrgId || !isAuthInitialized) return;
+    const fetchOrganizations = async () => {
+      if (!isAuthInitialized) return;
 
       try {
         const response = await organizations.getAll();
         const orgMap: Record<string, string> = {};
         const allOrgs = Array.isArray(response) ? response : response?.data || [];
 
-        if (allOrgs.length === 0) {
-          return;
-        }
-
-        // Create organizations map
         allOrgs.forEach((org: any) => {
           if (org && org.id) {
             orgMap[org.id] = org.name;
           }
         });
         setOrganizationsMap(orgMap);
-
-        // Find admin's organization details
-        const adminOrg = allOrgs.find((org: any) => org.id === adminOrgId);
-        if (!adminOrg) {
-          return;
-        }
-
-        setAdminOrgType(adminOrg.type);
-
-        // Determine allowed organizations based on hierarchy
-        const allOrgIds = allOrgs.map((org: any) => org.id);
-
-        // Function to check if org is descendant of parent
-        const isDescendantOf = (org: any, parentId: number, organizations: any[]): boolean => {
-          if (!org.parent) return false;
-          if (org.parent === parentId) return true;
-
-          const parentOrg = organizations.find(o => o.id === org.parent);
-          return parentOrg ? isDescendantOf(parentOrg, parentId, organizations) : false;
-        };
-
-        if (adminOrg.type === 'MINISTER') {
-          setAllowedOrgIds(allOrgIds);
-        } else {
-          const childOrgIds = allOrgs.filter((org: any) =>
-            org.id === adminOrgId ||
-            org.parent === adminOrgId ||
-            isDescendantOf(org, adminOrgId, allOrgs)
-          ).map((org: any) => org.id);
-
-          setAllowedOrgIds(childOrgIds);
-        }
-
       } catch (error) {
         setError('Failed to load organization data');
       }
     };
 
-    setupOrganizationHierarchy();
-  }, [adminOrgId, isAuthInitialized]);
+    fetchOrganizations();
+  }, [isAuthInitialized]);
 
-  // Direct sub-activities data fetch
-  const { data: directSubActivitiesData, isLoading: isLoadingDirectSubActivities } = useQuery({
-    queryKey: ['sub-activities', 'direct', allowedOrgIds, adminOrgType],
+  // Fetch analytics data from backend
+  const { data: analyticsData, isLoading: isLoadingAnalytics, refetch: refetchAnalytics } = useQuery({
+    queryKey: ['admin-analytics'],
     queryFn: async () => {
-      try {
-        const params: any = {};
-        if (adminOrgType !== 'MINISTER' && allowedOrgIds.length > 0) {
-          params.organization__in = allowedOrgIds.join(',');
-        }
-
-        const [subActivitiesResponse, mainActivitiesResponse] = await Promise.all([
-          api.get('/sub-activities/', { params }),
-          api.get('/main-activities/', { params })
-        ]);
-
-        const allSubActivities = subActivitiesResponse.data?.results || subActivitiesResponse.data || [];
-        const allMainActivities = mainActivitiesResponse.data?.results || mainActivitiesResponse.data || [];
-
-        const mainActivityOrgMap = new Map();
-        allMainActivities.forEach((activity: any) => {
-          mainActivityOrgMap.set(activity.id, activity.organization);
-        });
-
-        const enrichedSubActivities = allSubActivities.map((subActivity: any) => {
-          const activityOrg = mainActivityOrgMap.get(subActivity.main_activity);
-          return {
-            ...subActivity,
-            organization: activityOrg,
-            organizationName: activityOrg ? organizationsMap[activityOrg] || 'Unknown Organization' : 'No Organization'
-          };
-        });
-
-        return { data: enrichedSubActivities };
-      } catch (error) {
-        return { data: [] };
-      }
+      return await plans.getAdminAnalytics();
     },
-    enabled: isAuthInitialized && mainTab === 'plans' && (allowedOrgIds.length > 0 || adminOrgType === 'MINISTER') && (planSubTab === 'budget-activity' || planSubTab === 'analytics'),
-    staleTime: 30 * 60 * 1000,
-    gcTime: 60 * 60 * 1000,
-    retry: 1
+    enabled: isAuthInitialized && mainTab === 'plans' && planSubTab === 'analytics',
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000
   });
 
-  // Helper function to calculate plan budget from sub-activities (MOVED UP TO AVOID REFERENCE ERROR)
-  const calculatePlanBudgetFromSubActivities = (planId: string) => {
-    const subActivities = directSubActivitiesData?.data || [];
-
-    // For now, we'll estimate based on organization (more complex plan-to-subactivity mapping would require additional API calls)
-    const planSubActivities = subActivities; // All sub-activities for simplicity
-
-    return planSubActivities.reduce((sum, subActivity) => {
-      const cost = subActivity.budget_calculation_type === 'WITH_TOOL'
-        ? Number(subActivity.estimated_cost_with_tool || 0)
-        : Number(subActivity.estimated_cost_without_tool || 0);
-      return sum + cost;
-    }, 0);
-  };
-
-  // Fetch all plans for admin overview
-  const { data: allPlans, isLoading, refetch } = useQuery({
-    queryKey: ['plans', 'admin-all', allowedOrgIds],
+  // Fetch all plans with backend filtering
+  const { data: allPlansData, isLoading: isLoadingPlans, refetch: refetchPlans } = useQuery({
+    queryKey: ['plans', 'admin-all'],
     queryFn: async () => {
-      try {
-        const params: any = {};
-
-        // CRITICAL: Apply organization filtering for non-Minister admins
-        if (allowedOrgIds.length > 0 && adminOrgType !== 'MINISTER') {
-          // Non-Minister admin: filter by allowed organizations only
-          params.organization__in = allowedOrgIds.join(',');
-        } else {
-        }
-
-        const response = await api.get('/plans/', { params });
-        const plansData = (response.data?.results || response.data || []).map((plan: any) => ({
-          ...plan,
-          organizationName: organizationsMap[plan.organization] || plan.organization_name || 'Unknown Organization'
-        }));
-
-        return { data: plansData };
-      } catch (error) {
-        return { data: [] };
-      }
+      const response = await api.get('/plans/');
+      const plansData = (response.data?.results || response.data || []).map((plan: any) => ({
+        ...plan,
+        organizationName: organizationsMap[plan.organization] || plan.organization_name || 'Unknown Organization'
+      }));
+      return { data: plansData };
     },
-    enabled: isAuthInitialized && mainTab === 'plans' && (allowedOrgIds.length > 0 || adminOrgType === 'MINISTER'),
-    staleTime: 30 * 60 * 1000,
-    gcTime: 60 * 60 * 1000,
-    retry: 1
+    enabled: isAuthInitialized && mainTab === 'plans' && (planSubTab === 'pending' || planSubTab === 'reviewed'),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000
   });
 
-  // Helper function to get organization name
   const getOrganizationName = (plan: any) => {
     return plan.organizationName ||
            plan.organization_name ||
            (plan.organization && organizationsMap[plan.organization]) ||
            'Unknown Organization';
   };
-  // Plans are already filtered by API
+
   const reviewedPlansData = useMemo(() => {
-    return allPlans?.data || [];
-  }, [allPlans?.data]);
+    return allPlansData?.data || [];
+  }, [allPlansData?.data]);
 
-
-  // FILTERED: Calculate counts (organization hierarchy applied)
-  const { totalPlans, pendingCount, approvedCount, rejectedCount } = useMemo(() => {
-    let total = 0;
-    let pending = 0;
-    let approved = 0;
-    let rejected = 0;
-
-    reviewedPlansData.forEach(plan => {
-      if (['SUBMITTED', 'APPROVED'].includes(plan.status)) {
-        total++;
-      }
-      if (plan.status === 'SUBMITTED') pending++;
-      if (plan.status === 'APPROVED') approved++;
-      if (plan.status === 'REJECTED') rejected++;
-    });
-
-    return {
-      totalPlans: total,
-      pendingCount: pending,
-      approvedCount: approved,
-      rejectedCount: rejected
-    };
-  }, [reviewedPlansData]);
-
-  // Calculate budget totals directly from sub-activities
   const budgetTotals = useMemo(() => {
-    // Only compute when on analytics tab
-    if (mainTab !== 'plans' || planSubTab !== 'analytics') {
+    if (!analyticsData) {
       return {
         totalBudget: 0,
         totalFunding: 0,
@@ -314,71 +149,24 @@ const AdminDashboard: React.FC = () => {
       };
     }
 
-    const subActivities = directSubActivitiesData?.data || [];
-    const submittedAndApprovedPlans = reviewedPlansData.filter(plan => ['SUBMITTED', 'APPROVED'].includes(plan.status));
-    const submittedAndApprovedOrgIds = submittedAndApprovedPlans.map(plan => Number(plan.organization));
-
-
-    if (subActivities.length === 0) {
-      return {
-        totalBudget: 0,
-        totalFunding: 0,
-        fundingGap: 0,
-        governmentTotal: 0,
-        partnersTotal: 0,
-        sdgTotal: 0,
-        otherTotal: 0
-      };
-    }
-
-    let totalBudget = 0;
-    let totalFunding = 0;
-    let governmentTotal = 0;
-    let partnersTotal = 0;
-    let sdgTotal = 0;
-    let otherTotal = 0;
-
-    subActivities.forEach((subActivity: any) => {
-      // CRITICAL: Only include sub-activities from organizations with SUBMITTED or APPROVED plans
-      if (!submittedAndApprovedOrgIds.includes(Number(subActivity.organization))) {
-        return; // Skip sub-activities from organizations with only REJECTED or DRAFT plans
-      }
-
-      const budget = subActivity.budget_calculation_type === 'WITH_TOOL'
-        ? Number(subActivity.estimated_cost_with_tool || 0)
-        : Number(subActivity.estimated_cost_without_tool || 0);
-
-      const government = Number(subActivity.government_treasury || 0);
-      const partners = Number(subActivity.partners_funding || 0);
-      const sdg = Number(subActivity.sdg_funding || 0);
-      const other = Number(subActivity.other_funding || 0);
-      const funding = government + partners + sdg + other;
-
-      totalBudget += budget;
-      totalFunding += funding;
-      governmentTotal += government;
-      partnersTotal += partners;
-      sdgTotal += sdg;
-      otherTotal += other;
-    });
-
+    const budgets = analyticsData.budget_totals;
+    const totalBudget = budgets.total_with_tool + budgets.total_without_tool;
+    const totalFunding = budgets.government_total + budgets.partners_total + budgets.sdg_total + budgets.other_total;
     const fundingGap = Math.max(0, totalBudget - totalFunding);
 
     return {
       totalBudget,
       totalFunding,
       fundingGap,
-      governmentTotal,
-      partnersTotal,
-      sdgTotal,
-      otherTotal
+      governmentTotal: budgets.government_total,
+      partnersTotal: budgets.partners_total,
+      sdgTotal: budgets.sdg_total,
+      otherTotal: budgets.other_total
     };
-  }, [mainTab, planSubTab, directSubActivitiesData?.data, reviewedPlansData]);
+  }, [analyticsData]);
 
-  // Calculate activity type budgets directly from sub-activities
   const calculateActivityTypeBudgets = useMemo(() => {
-    // Only compute when on analytics tab
-    if (mainTab !== 'plans' || planSubTab !== 'analytics') {
+    if (!analyticsData) {
       return {
         Training: { count: 0, budget: 0 },
         Meeting: { count: 0, budget: 0 },
@@ -390,310 +178,16 @@ const AdminDashboard: React.FC = () => {
       };
     }
 
-    const subActivities = directSubActivitiesData?.data || [];
-    const submittedAndApprovedPlans = reviewedPlansData.filter(plan => ['SUBMITTED', 'APPROVED'].includes(plan.status));
-    const submittedAndApprovedOrgIds = submittedAndApprovedPlans.map(plan => Number(plan.organization));
+    return analyticsData.activity_budgets;
+  }, [analyticsData]);
 
-
-    const activityBudgets = {
-      Training: { count: 0, budget: 0 },
-      Meeting: { count: 0, budget: 0 },
-      Workshop: { count: 0, budget: 0 },
-      Supervision: { count: 0, budget: 0 },
-      Procurement: { count: 0, budget: 0 },
-      Printing: { count: 0, budget: 0 },
-      Other: { count: 0, budget: 0 }
-    };
-
-    // Process sub-activities directly
-    subActivities.forEach((subActivity: any) => {
-      // CRITICAL: Only include sub-activities from organizations with SUBMITTED or APPROVED plans
-      if (!submittedAndApprovedOrgIds.includes(Number(subActivity.organization))) {
-        return; // Skip sub-activities from organizations with only REJECTED or DRAFT plans
-      }
-
-      const activityType = subActivity.activity_type || 'Other';
-      const key = activityType as keyof typeof activityBudgets;
-
-      if (activityBudgets[key]) {
-        activityBudgets[key].count++;
-
-        const cost = subActivity.budget_calculation_type === 'WITH_TOOL'
-          ? Number(subActivity.estimated_cost_with_tool || 0)
-          : Number(subActivity.estimated_cost_without_tool || 0);
-
-        activityBudgets[key].budget += cost;
-      }
-    });
-
-    return activityBudgets;
-  }, [mainTab, planSubTab, directSubActivitiesData?.data, reviewedPlansData]);
-
-  // Calculate monthly trends
-  const monthlyTrends = useMemo(() => {
-    const submittedAndApprovedPlans = reviewedPlansData.filter(plan => ['SUBMITTED', 'APPROVED'].includes(plan.status));
-
-    const monthlyData: Record<string, { submissions: number; budget: number }> = {};
-
-    submittedAndApprovedPlans.forEach((plan: any) => {
-      if (plan.submitted_at) {
-        const month = format(new Date(plan.submitted_at), 'MMM yyyy');
-        if (!monthlyData[month]) {
-          monthlyData[month] = { submissions: 0, budget: 0 };
-        }
-        monthlyData[month].submissions++;
-        // Calculate budget from sub-activities for this plan
-        const planBudget = calculatePlanBudgetFromSubActivities(plan.id);
-        monthlyData[month].budget += planBudget;
-      }
-    });
-
-    // Sort months chronologically
-    const sortedMonths = Object.keys(monthlyData).sort((a, b) =>
-      new Date(a).getTime() - new Date(b).getTime()
-    );
-
-    return {
-      labels: sortedMonths,
-      submissions: sortedMonths.map(month => monthlyData[month].submissions),
-      budgets: sortedMonths.map(month => monthlyData[month].budget)
-    };
-  }, [reviewedPlansData, directSubActivitiesData?.data]);
-
-  // Calculate organization performance for charts
-  const orgPerformance = useMemo(() => {
-    const submittedAndApprovedPlans = reviewedPlansData.filter(plan => ['SUBMITTED', 'APPROVED'].includes(plan.status));
-
-    const orgData: Record<string, { plans: number; budget: number; name: string }> = {};
-
-    submittedAndApprovedPlans.forEach((plan: any) => {
-      const orgId = plan.organization;
-      const orgName = getOrganizationName(plan);
-
-      if (!orgData[orgId]) {
-        orgData[orgId] = { plans: 0, budget: 0, name: orgName };
-      }
-
-      orgData[orgId].plans++;
-      // Calculate budget from sub-activities for this organization
-      const orgSubActivities = (directSubActivitiesData?.data || []).filter(
-        (subActivity: any) => subActivity.organization === orgId
-      );
-      const orgBudget = orgSubActivities.reduce((sum, subActivity) => {
-        const cost = subActivity.budget_calculation_type === 'WITH_TOOL'
-          ? Number(subActivity.estimated_cost_with_tool || 0)
-          : Number(subActivity.estimated_cost_without_tool || 0);
-        return sum + cost;
-      }, 0);
-      orgData[orgId].budget += orgBudget;
-    });
-
-    const sortedOrgs = Object.values(orgData)
-      .sort((a, b) => b.plans - a.plans)
-      .slice(0, 10);
-
-    return {
-      labels: sortedOrgs.map(org => org.name),
-      plans: sortedOrgs.map(org => org.plans),
-      budgets: sortedOrgs.map(org => org.budget)
-    };
-  }, [reviewedPlansData, directSubActivitiesData?.data]);
-
-  // Calculate budget by activity type for table
-  const budgetByActivityData = useMemo(() => {
-    const subActivities = directSubActivitiesData?.data || [];
-
-
-    const orgActivityData: Record<string, {
-      organizationName: string;
-      Training: { count: number; budget: number };
-      Meeting: { count: number; budget: number };
-      Workshop: { count: number; budget: number };
-      Procurement: { count: number; budget: number };
-      Printing: { count: number; budget: number };
-      Other: { count: number; budget: number };
-      totalCount: number;
-      totalBudget: number;
-    }> = {};
-
-    // Process sub-activities directly by organization
-    subActivities.forEach((subActivity: any) => {
-      const orgId = subActivity.organization || 'unknown';
-      const orgName = subActivity.organizationName || organizationsMap[orgId] || 'Unknown Organization';
-
-      if (!orgActivityData[orgId]) {
-        orgActivityData[orgId] = {
-          organizationName: orgName,
-          Training: { count: 0, budget: 0 },
-          Meeting: { count: 0, budget: 0 },
-          Workshop: { count: 0, budget: 0 },
-          Procurement: { count: 0, budget: 0 },
-          Printing: { count: 0, budget: 0 },
-          Other: { count: 0, budget: 0 },
-          totalCount: 0,
-          totalBudget: 0
-        };
-      }
-
-      const activityType = subActivity.activity_type || 'Other';
-      const key = activityType as keyof typeof orgActivityData[typeof orgId];
-
-      if (orgActivityData[orgId][key]) {
-        orgActivityData[orgId][key].count++;
-        orgActivityData[orgId].totalCount++;
-
-        const cost = subActivity.budget_calculation_type === 'WITH_TOOL'
-          ? Number(subActivity.estimated_cost_with_tool || 0)
-          : Number(subActivity.estimated_cost_without_tool || 0);
-
-        orgActivityData[orgId][key].budget += cost;
-        orgActivityData[orgId].totalBudget += cost;
-      }
-    });
-
-    const result = Object.values(orgActivityData);
-    result.forEach(org => {
-    });
-
-    return result;
-  }, [directSubActivitiesData?.data, organizationsMap]);
-
-  // Calculate executive performance data
-  const executivePerformanceData = useMemo(() => {
-    const submittedAndApprovedPlans = reviewedPlansData.filter(plan => ['SUBMITTED', 'APPROVED'].includes(plan.status));
-
-    const executiveData: Record<string, {
-      organizationName: string;
-      totalPlans: number;
-      approved: number;
-      submitted: number;
-      totalBudget: number;
-      availableFunding: number;
-      governmentBudget: number;
-      sdgBudget: number;
-      partnersBudget: number;
-      fundingGap: number;
-    }> = {};
-
-    // CRITICAL: Only process organizations that are in the allowed hierarchy
-    submittedAndApprovedPlans.forEach((plan: any) => {
-      const orgId = plan.organization;
-
-      // Skip if organization is not in allowed list for non-Minister admins
-      if (adminOrgType !== 'MINISTER' && allowedOrgIds.length > 0 && !allowedOrgIds.includes(Number(orgId))) {
-        return;
-      }
-
-      const orgName = getOrganizationName(plan);
-
-      if (!executiveData[orgId]) {
-        executiveData[orgId] = {
-          organizationName: orgName,
-          totalPlans: 0,
-          approved: 0,
-          submitted: 0,
-          totalBudget: 0,
-          availableFunding: 0,
-          governmentBudget: 0,
-          sdgBudget: 0,
-          partnersBudget: 0,
-          fundingGap: 0
-        };
-      }
-
-      executiveData[orgId].totalPlans++;
-
-      if (plan.status === 'APPROVED') {
-        executiveData[orgId].approved++;
-      } else if (plan.status === 'SUBMITTED') {
-        executiveData[orgId].submitted++;
-      }
-
-      // Calculate budget from sub-activities for this organization
-      const orgSubActivities = (directSubActivitiesData?.data || []).filter(
-        (subActivity: any) => subActivity.organization === orgId
-      );
-
-      orgSubActivities.forEach((subActivity: any) => {
-        const cost = subActivity.budget_calculation_type === 'WITH_TOOL'
-          ? Number(subActivity.estimated_cost_with_tool || 0)
-          : Number(subActivity.estimated_cost_without_tool || 0);
-
-        const government = Number(subActivity.government_treasury || 0);
-        const partners = Number(subActivity.partners_funding || 0);
-        const sdg = Number(subActivity.sdg_funding || 0);
-        const other = Number(subActivity.other_funding || 0);
-        const funding = government + partners + sdg + other;
-
-        executiveData[orgId].totalBudget += cost;
-        executiveData[orgId].availableFunding += funding;
-        executiveData[orgId].governmentBudget += government;
-        executiveData[orgId].sdgBudget += sdg;
-        executiveData[orgId].partnersBudget += partners;
-        executiveData[orgId].fundingGap += Math.max(0, cost - funding);
-      });
-    });
-
-    const result = Object.values(executiveData);
-
-    return result;
-  }, [reviewedPlansData, directSubActivitiesData?.data]);
-
-  // Calculate complete budget overview for analytics
-  const completeBudgetOverview = useMemo(() => {
-    const subActivities = directSubActivitiesData?.data || [];
-
-    const orgBudgetData: Record<string, {
-      organizationName: string;
-      totalBudget: number;
-      funding: number;
-    }> = {};
-
-    // Process sub-activities directly by organization
-    subActivities.forEach((subActivity: any) => {
-      const orgId = subActivity.organization || 'unknown';
-      const orgName = subActivity.organizationName || organizationsMap[orgId] || 'Unknown Organization';
-
-      if (!orgBudgetData[orgId]) {
-        orgBudgetData[orgId] = {
-          organizationName: orgName,
-          totalBudget: 0,
-          funding: 0
-        };
-      }
-
-      const cost = subActivity.budget_calculation_type === 'WITH_TOOL'
-        ? Number(subActivity.estimated_cost_with_tool || 0)
-        : Number(subActivity.estimated_cost_without_tool || 0);
-
-      const funding = Number(subActivity.government_treasury || 0) +
-                     Number(subActivity.partners_funding || 0) +
-                     Number(subActivity.sdg_funding || 0) +
-                     Number(subActivity.other_funding || 0);
-
-      orgBudgetData[orgId].totalBudget += cost;
-      orgBudgetData[orgId].funding += funding;
-    });
-
-    const result = Object.values(orgBudgetData).sort((a, b) => b.totalBudget - a.totalBudget);
-
-    return result;
-  }, [directSubActivitiesData?.data, organizationsMap]);
-
-  // Filter and sort pending plans
   const getFilteredPendingPlans = useMemo(() => {
-    // Start with plans already filtered by organization hierarchy
-    let filtered = reviewedPlansData.filter(plan =>
-      plan.status === 'SUBMITTED'
-    );
+    let filtered = reviewedPlansData.filter(plan => plan.status === 'SUBMITTED');
 
-
-    // Apply organization filter
     if (pendingOrgFilter !== 'all') {
       filtered = filtered.filter(plan => plan.organization === pendingOrgFilter);
     }
 
-    // Apply search filter
     if (pendingSearch) {
       filtered = filtered.filter(plan =>
         getOrganizationName(plan).toLowerCase().includes(pendingSearch.toLowerCase()) ||
@@ -701,7 +195,6 @@ const AdminDashboard: React.FC = () => {
       );
     }
 
-    // Apply sorting
     filtered.sort((a, b) => {
       let aValue: any, bValue: any;
 
@@ -729,98 +222,27 @@ const AdminDashboard: React.FC = () => {
       }
     });
 
-    // Add REAL budget calculation for filtered plans from sub-activities
-    const enrichedFiltered = filtered.map((plan: any) => {
-      // Get PLAN-SPECIFIC sub-activities by finding main activities that belong to this plan
-      const planSubActivities = (directSubActivitiesData?.data || []).filter((subActivity: any) => {
-        // This is a simplified approach - in a real scenario, you'd need to link sub-activities to specific plans
-        // For now, we'll use organization-based filtering which gives representative budget data
-        return subActivity.organization === plan.organization;
-      });
-
-
-      let totalBudget = 0;
-      let totalFunding = 0;
-      let government = 0;
-      let partners = 0;
-      let sdg = 0;
-      let other = 0;
-
-      // Calculate proportional budget for this plan (divide org budget by number of org plans)
-      const orgPlans = reviewedPlansData.filter(p =>
-        p.organization === plan.organization && ['SUBMITTED', 'APPROVED'].includes(p.status)
-      );
-
-      const planWeight = orgPlans.length > 0 ? 1 / orgPlans.length : 1;
-
-      planSubActivities.forEach((subActivity: any) => {
-        const cost = subActivity.budget_calculation_type === 'WITH_TOOL'
-          ? Number(subActivity.estimated_cost_with_tool || 0)
-          : Number(subActivity.estimated_cost_without_tool || 0);
-
-        const gov = Number(subActivity.government_treasury || 0);
-        const part = Number(subActivity.partners_funding || 0);
-        const sdgFund = Number(subActivity.sdg_funding || 0);
-        const otherFund = Number(subActivity.other_funding || 0);
-        const funding = gov + part + sdgFund + otherFund;
-
-        // Apply proportional weight to avoid double-counting when multiple plans per organization
-        totalBudget += cost * planWeight;
-        totalFunding += funding * planWeight;
-        government += gov * planWeight;
-        partners += part * planWeight;
-        sdg += sdgFund * planWeight;
-        other += otherFund * planWeight;
-      });
-
-      const gap = Math.max(0, totalBudget - totalFunding);
-
-
-      return {
-        ...plan,
-        budget: {
-          total: totalBudget,
-          totalFunding,
-          government,
-          partners,
-          sdg,
-          other,
-          gap
-        }
-      };
-    });
-
-    return enrichedFiltered;
-  }, [reviewedPlansData, pendingOrgFilter, pendingSearch, pendingSortBy, pendingSortOrder, directSubActivitiesData?.data]);
+    return filtered;
+  }, [reviewedPlansData, pendingOrgFilter, pendingSearch, pendingSortBy, pendingSortOrder]);
 
   const filteredPendingPlans = getFilteredPendingPlans;
-
-  // Pagination for pending plans
   const pendingTotalPages = Math.ceil(filteredPendingPlans.length / pendingItemsPerPage);
-  const pendingStartIndex = (pendingCurrentPage - 1) * pendingItemsPerPage;
-  const pendingPaginatedPlans = filteredPendingPlans.slice(
-    pendingStartIndex,
-    pendingStartIndex + pendingItemsPerPage
+  const paginatedPendingPlans = filteredPendingPlans.slice(
+    (pendingCurrentPage - 1) * pendingItemsPerPage,
+    pendingCurrentPage * pendingItemsPerPage
   );
 
-  // Filter and sort reviewed plans
   const getFilteredReviewedPlans = useMemo(() => {
-    // Start with plans already filtered by organization hierarchy
-    let filtered = reviewedPlansData.filter(plan =>
-      ['APPROVED', 'REJECTED'].includes(plan.status)
-    );
+    let filtered = reviewedPlansData;
 
-    // Apply status filter
     if (reviewedFilter !== 'all') {
       filtered = filtered.filter(plan => plan.status === reviewedFilter);
     }
 
-    // Apply organization filter
     if (reviewedOrgFilter !== 'all') {
       filtered = filtered.filter(plan => plan.organization === reviewedOrgFilter);
     }
 
-    // Apply search filter
     if (reviewedSearch) {
       filtered = filtered.filter(plan =>
         getOrganizationName(plan).toLowerCase().includes(reviewedSearch.toLowerCase()) ||
@@ -828,7 +250,6 @@ const AdminDashboard: React.FC = () => {
       );
     }
 
-    // Apply sorting
     filtered.sort((a, b) => {
       let aValue: any, bValue: any;
 
@@ -842,8 +263,8 @@ const AdminDashboard: React.FC = () => {
           bValue = getOrganizationName(b).toLowerCase();
           break;
         case 'status':
-          aValue = a.status;
-          bValue = b.status;
+          aValue = (a.status || '').toLowerCase();
+          bValue = (b.status || '').toLowerCase();
           break;
         default:
           return 0;
@@ -856,1562 +277,538 @@ const AdminDashboard: React.FC = () => {
       }
     });
 
-    // Add REAL budget calculation for filtered plans from sub-activities
-    const enrichedFiltered = filtered.map((plan: any) => {
-      // Get PLAN-SPECIFIC sub-activities by finding main activities that belong to this plan
-      const planSubActivities = (directSubActivitiesData?.data || []).filter((subActivity: any) => {
-        // This is a simplified approach - in a real scenario, you'd need to link sub-activities to specific plans
-        // For now, we'll use organization-based filtering which gives representative budget data
-        return subActivity.organization === plan.organization;
-      });
-
-
-      let totalBudget = 0;
-      let totalFunding = 0;
-      let government = 0;
-      let partners = 0;
-      let sdg = 0;
-      let other = 0;
-
-      // Calculate proportional budget for this plan (divide org budget by number of org plans)
-      const orgPlans = reviewedPlansData.filter(p =>
-        p.organization === plan.organization && ['SUBMITTED', 'APPROVED'].includes(p.status)
-      );
-
-      const planWeight = orgPlans.length > 0 ? 1 / orgPlans.length : 1;
-
-      planSubActivities.forEach((subActivity: any) => {
-        const cost = subActivity.budget_calculation_type === 'WITH_TOOL'
-          ? Number(subActivity.estimated_cost_with_tool || 0)
-          : Number(subActivity.estimated_cost_without_tool || 0);
-
-        const gov = Number(subActivity.government_treasury || 0);
-        const part = Number(subActivity.partners_funding || 0);
-        const sdgFund = Number(subActivity.sdg_funding || 0);
-        const otherFund = Number(subActivity.other_funding || 0);
-        const funding = gov + part + sdgFund + otherFund;
-
-        // Apply proportional weight to avoid double-counting when multiple plans per organization
-        totalBudget += cost * planWeight;
-        totalFunding += funding * planWeight;
-        government += gov * planWeight;
-        partners += part * planWeight;
-        sdg += sdgFund * planWeight;
-        other += otherFund * planWeight;
-      });
-
-      const gap = Math.max(0, totalBudget - totalFunding);
-
-
-      return {
-        ...plan,
-        budget: {
-          total: totalBudget,
-          totalFunding,
-          government,
-          partners,
-          sdg,
-          other,
-          gap
-        }
-      };
-    });
-
-    return enrichedFiltered;
-  }, [reviewedPlansData, reviewedFilter, reviewedOrgFilter, reviewedSearch, reviewedSortBy, reviewedSortOrder, directSubActivitiesData?.data]);
+    return filtered;
+  }, [reviewedPlansData, reviewedFilter, reviewedOrgFilter, reviewedSearch, reviewedSortBy, reviewedSortOrder]);
 
   const filteredReviewedPlans = getFilteredReviewedPlans;
-
-  // Pagination for reviewed plans
   const reviewedTotalPages = Math.ceil(filteredReviewedPlans.length / reviewedItemsPerPage);
-  const reviewedStartIndex = (reviewedCurrentPage - 1) * reviewedItemsPerPage;
-  const reviewedPaginatedPlans = filteredReviewedPlans.slice(
-    reviewedStartIndex,
-    reviewedStartIndex + reviewedItemsPerPage
+  const paginatedReviewedPlans = filteredReviewedPlans.slice(
+    (reviewedCurrentPage - 1) * reviewedItemsPerPage,
+    reviewedCurrentPage * reviewedItemsPerPage
   );
-
-  // Pagination for budget by activity
-  const budgetActivityTotalPages = Math.ceil(budgetByActivityData.length / budgetActivityItemsPerPage);
-  const budgetActivityStartIndex = (budgetActivityCurrentPage - 1) * budgetActivityItemsPerPage;
-  const budgetActivityPaginatedData = budgetByActivityData.slice(
-    budgetActivityStartIndex,
-    budgetActivityStartIndex + budgetActivityItemsPerPage
-  );
-
-  // Pagination for executive performance
-  const executiveTotalPages = Math.ceil(executivePerformanceData.length / executiveItemsPerPage);
-  const executiveStartIndex = (executiveCurrentPage - 1) * executiveItemsPerPage;
-  const executivePaginatedData = executivePerformanceData.slice(
-    executiveStartIndex,
-    executiveStartIndex + executiveItemsPerPage
-  );
-
-  const formatDate = (dateString: string | null | undefined) => {
-    if (!dateString) return 'Not available';
-    try {
-      return format(new Date(dateString), 'MMM d, yyyy');
-    } catch (e) {
-      return 'Invalid date';
-    }
-  };
-
-  const formatCurrency = (amount: number): string => {
-    return `ETB ${amount.toLocaleString('en-US')}`;
-  };
-
-  // Chart configurations
-  const planStatusChartData = {
-    labels: ['Approved', 'Rejected', 'Pending'],
-    datasets: [{
-      data: [approvedCount, rejectedCount, pendingCount],
-      backgroundColor: ['#10B981', '#EF4444', '#F59E0B'],
-      borderWidth: 2,
-      borderColor: '#ffffff'
-    }]
-  };
-
-  const budgetDistributionChartData = {
-    labels: ['Government', 'Partners', 'SDG', 'Other', 'Gap'],
-    datasets: [{
-      data: [
-        budgetTotals.governmentTotal,
-        budgetTotals.partnersTotal,
-        budgetTotals.sdgTotal,
-        budgetTotals.otherTotal,
-        budgetTotals.fundingGap
-      ],
-      backgroundColor: ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444'],
-      borderWidth: 2,
-      borderColor: '#ffffff'
-    }]
-  };
-
-  const monthlyTrendsChartData = {
-    labels: monthlyTrends.labels,
-    datasets: [
-      {
-        type: 'line' as const,
-        label: 'Submissions',
-        data: monthlyTrends.submissions,
-        borderColor: '#3B82F6',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        yAxisID: 'y',
-        tension: 0.4
-      },
-      {
-        type: 'bar' as const,
-        label: 'Budget (ETB)',
-        data: monthlyTrends.budgets,
-        backgroundColor: 'rgba(16, 185, 129, 0.8)',
-        yAxisID: 'y1'
-      }
-    ]
-  };
-
-  const orgPerformanceChartData = {
-    labels: orgPerformance.labels,
-    datasets: [
-      {
-        label: 'Plans Count',
-        data: orgPerformance.plans,
-        backgroundColor: 'rgba(59, 130, 246, 0.8)',
-        yAxisID: 'y'
-      },
-      {
-        label: 'Budget (ETB)',
-        data: orgPerformance.budgets,
-        backgroundColor: 'rgba(16, 185, 129, 0.8)',
-        yAxisID: 'y1'
-      }
-    ]
-  };
-
-  // Complete Budget Overview Chart Data
-  const completeBudgetChartData = {
-    labels: completeBudgetOverview.map(org => org.organizationName),
-    datasets: [
-      {
-        label: 'Total Budget',
-        data: completeBudgetOverview.map(org => org.totalBudget),
-        backgroundColor: completeBudgetOverview.map((_, index) => {
-          const colors = [
-            '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
-            '#06B6D4', '#84CC16', '#F97316', '#EC4899', '#6366F1',
-            '#14B8A6', '#F59E0B', '#8B5CF6', '#06B6D4', '#84CC16'
-          ];
-          return colors[index % colors.length];
-        }),
-        borderWidth: 1,
-        borderRadius: 4
-      },
-      {
-        label: 'Available Funding',
-        data: completeBudgetOverview.map(org => org.funding),
-        backgroundColor: completeBudgetOverview.map((_, index) => {
-          const colors = [
-            '#93C5FD', '#86EFAC', '#FCD34D', '#FCA5A5', '#C4B5FD',
-            '#67E8F9', '#BEF264', '#FDBA74', '#F9A8D4', '#A5B4FC',
-            '#5EEAD4', '#FCD34D', '#C4B5FD', '#67E8F9', '#BEF264'
-          ];
-          return colors[index % colors.length];
-        }),
-        borderWidth: 1,
-        borderRadius: 4
-      }
-    ]
-  };
-
-  // Show loading during initialization
-  if (!isAuthInitialized || isLoading || isLoadingDirectSubActivities) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader className="h-6 w-6 animate-spin mr-2 text-blue-600" />
-        <span className="text-lg">
-          {!isAuthInitialized ? 'Checking admin permissions...' :
-           isLoadingDirectSubActivities ? 'Loading budget data...' :
-           'Loading admin dashboard...'}
-        </span>
-      </div>
-    );
-  }
 
   if (error) {
     return (
-      <div className="p-8 bg-red-50 border border-red-200 rounded-lg text-center">
-        <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-red-800">Access Denied</h3>
-        <p className="text-red-600 mt-2">{error}</p>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md">
+          <div className="flex items-center space-x-2 text-red-600 mb-4">
+            <AlertCircle className="h-6 w-6" />
+            <h2 className="text-xl font-semibold">Access Denied</h2>
+          </div>
+          <p className="text-gray-600">{error}</p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="mt-4 w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700"
+          >
+            Return to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
 
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-ET', {
+      style: 'currency',
+      currency: 'ETB',
+      minimumFractionDigits: 2
+    }).format(value);
+  };
+
+  const totalPlans = analyticsData?.total_plans || 0;
+  const pendingCount = analyticsData?.pending_count || 0;
+  const approvedCount = analyticsData?.approved_count || 0;
+  const rejectedCount = analyticsData?.rejected_count || 0;
+
   return (
-    <div className="px-4 py-6 sm:px-0">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-green-600 rounded-lg shadow-lg mb-8 overflow-hidden">
-        <div className="px-8 py-12 text-white">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
           <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center mb-4">
-                <Shield className="h-12 w-12 text-white mr-4" />
-                <div>
-                  <h1 className="text-4xl font-bold">
-                    {adminOrgType === 'MINISTER' ? 'Higher Officials Dashboard' : 'State Minister Level Dashboard'}
-                  </h1>
-                  <p className="text-xl text-blue-100">
-                    Ministry of Health - {adminOrgType === 'MINISTER' ? 'System-wide' : 'Hierarchy'} Plan Overview
-                  </p>
-                </div>
-              </div>
-              <p className="text-lg text-blue-100 max-w-2xl">
-                Comprehensive monitoring and analysis of strategic planning activities across{' '}
-                {adminOrgType === 'MINISTER' ? 'all organizational units' : 'your organizational hierarchy'}.
-                Track plan submissions, budget allocations, and performance metrics in real-time.
-              </p>
-            </div>
-            <div className="text-right">
-              <div className="text-3xl font-bold">{totalPlans}</div>
-              <div className="text-blue-100">Total Plans</div>
-              <div className="text-sm text-blue-200 mt-2">
-                {adminOrgType === 'MINISTER' ? 'System-wide' : `${adminOrgType} Hierarchy`}
+            <div className="flex items-center space-x-3">
+              <Shield className="h-8 w-8 text-blue-600" />
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+                <p className="text-sm text-gray-500 mt-1">Comprehensive planning and reporting overview</p>
               </div>
             </div>
+            <button
+              onClick={() => {
+                refetchAnalytics();
+                refetchPlans();
+              }}
+              className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span>Refresh</span>
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* Debug information for troubleshooting */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="mb-4 p-4 bg-gray-100 rounded-lg text-xs text-gray-600">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>Admin Org ID: {adminOrgId || 'Not set'}</div>
-            <div>Admin Org Type: {adminOrgType || 'Not set'}</div>
-            <div>Allowed Orgs: {allowedOrgIds.length}</div>
-            <div>Total Plans: {reviewedPlansData.length}</div>
-            <div>Organizations Map: {Object.keys(organizationsMap).length}</div>
-            <div>Budget Total: {formatCurrency(budgetTotals.totalBudget)}</div>
-            <div>Sub-Activities: {(directSubActivitiesData?.data || []).length}</div>
-            <div>Auth Initialized: {isAuthInitialized ? 'Yes' : 'No'}</div>
-            <div>Loading Sub-Activities: {isLoadingDirectSubActivities ? 'Yes' : 'No'}</div>
-            <div>Activity Types Total: {Object.values(calculateActivityTypeBudgets).reduce((sum, type) => sum + type.count, 0)}</div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Tab Navigation */}
-      <div className="mb-6">
-        <div className="border-b border-gray-200">
-          <nav className="flex -mb-px space-x-8">
+        <div className="mb-6 border-b border-gray-200">
+          <div className="flex space-x-8">
             <button
               onClick={() => setMainTab('plans')}
-              className={`py-4 px-1 border-b-2 font-semibold text-base ${
+              className={`pb-4 px-1 border-b-2 font-medium text-sm ${
                 mainTab === 'plans'
-                  ? 'border-blue-600 text-blue-600'
+                  ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Plans
+              <div className="flex items-center space-x-2">
+                <FileText className="h-5 w-5" />
+                <span>Plans</span>
+              </div>
             </button>
             <button
               onClick={() => setMainTab('reports')}
-              className={`py-4 px-1 border-b-2 font-semibold text-base ${
+              className={`pb-4 px-1 border-b-2 font-medium text-sm ${
                 mainTab === 'reports'
-                  ? 'border-blue-600 text-blue-600'
+                  ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Reports
-            </button>
-          </nav>
-        </div>
-      </div>
-
-      {/* Plan Sub-Tabs */}
-      {mainTab === 'plans' && (
-        <div className="mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="flex -mb-px space-x-6 overflow-x-auto">
-              <button
-                onClick={() => setPlansSubTab('analytics')}
-                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  planSubTab === 'analytics'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Analytics
-              </button>
-              <button
-                onClick={() => setPlansSubTab('pending')}
-                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  planSubTab === 'pending'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Pending Reviews
-                {pendingCount > 0 && (
-                  <span className="ml-2 bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-xs">
-                    {pendingCount}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setPlansSubTab('reviewed')}
-                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  planSubTab === 'reviewed'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Reviewed Plans
-                {(approvedCount + rejectedCount) > 0 && (
-                  <span className="ml-2 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs">
-                    {approvedCount + rejectedCount}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setPlansSubTab('budget-activity')}
-                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  planSubTab === 'budget-activity'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Budget by Activity
-              </button>
-              <button
-                onClick={() => setPlansSubTab('executive-performance')}
-                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  planSubTab === 'executive-performance'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Executive Performance
-              </button>
-            </nav>
-          </div>
-        </div>
-      )}
-
-      {/* Report Sub-Tabs */}
-      {mainTab === 'reports' && (
-        <div className="mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="flex -mb-px space-x-6">
-              <button
-                onClick={() => setReportSubTab('performance-overview')}
-                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  reportSubTab === 'performance-overview'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Organization Performance Overview
-              </button>
-              <button
-                onClick={() => setReportSubTab('approved-reports')}
-                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  reportSubTab === 'approved-reports'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Approved M&E Reports
-              </button>
-              <button
-                onClick={() => setReportSubTab('budget-utilization')}
-                className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  reportSubTab === 'budget-utilization'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Budget Utilization by Source
-              </button>
-            </nav>
-          </div>
-        </div>
-      )}
-
-      {/* Plan Content */}
-      {mainTab === 'plans' && (
-        <>
-      {/* Pending Reviews Tab */}
-          {planSubTab === 'pending' && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0">
-              <div>
-                <h3 className="text-lg font-medium leading-6 text-gray-900">Pending Reviews</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  All plans awaiting review from{' '}
-                  {adminOrgType === 'MINISTER' ? 'all organizations' : 'your organizational hierarchy'}
-                </p>
+              <div className="flex items-center space-x-2">
+                <BarChart3 className="h-5 w-5" />
+                <span>Reports</span>
               </div>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
-                <div className="flex items-center space-x-2">
-                  <Search className="h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search planner or organization..."
-                    value={pendingSearch}
-                    onChange={(e) => setPendingSearch(e.target.value)}
-                    className="text-sm border border-gray-300 rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <select
-                  value={pendingOrgFilter}
-                  onChange={(e) => setPendingOrgFilter(e.target.value)}
-                  className="text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                >
-                  <option value="all">
-                    {adminOrgType === 'MINISTER' ? 'All Executives' : 'All Hierarchy Executives'}
-                  </option>
-                  {Object.entries(organizationsMap)
-                    .filter(([id]) =>
-                      adminOrgType === 'MINISTER' || allowedOrgIds.includes(Number(id))
-                    )
-                    .map(([id, name]) => (
-                      <option key={id} value={id}>{name}</option>
-                    ))}
-                </select>
+            </button>
+          </div>
+        </div>
+
+        {mainTab === 'plans' && (
+          <div>
+            <div className="mb-6 border-b border-gray-200">
+              <div className="flex space-x-4 overflow-x-auto">
                 <button
-                  onClick={() => refetch()}
-                  className="flex items-center px-3 py-2 text-sm text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md"
+                  onClick={() => setPlansSubTab('analytics')}
+                  className={`pb-4 px-4 border-b-2 font-medium text-sm whitespace-nowrap ${
+                    planSubTab === 'analytics'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
                 >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
+                  Analytics
+                </button>
+                <button
+                  onClick={() => setPlansSubTab('pending')}
+                  className={`pb-4 px-4 border-b-2 font-medium text-sm whitespace-nowrap ${
+                    planSubTab === 'pending'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Pending Reviews
+                  {pendingCount > 0 && (
+                    <span className="ml-2 px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
+                      {pendingCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setPlansSubTab('reviewed')}
+                  className={`pb-4 px-4 border-b-2 font-medium text-sm whitespace-nowrap ${
+                    planSubTab === 'reviewed'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Reviewed Plans
                 </button>
               </div>
             </div>
 
-            {filteredPendingPlans.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                <AlertCircle className="h-12 w-12 text-amber-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-1">No pending plans found</h3>
-                <p className="text-gray-500">
-                  {pendingSearch || pendingOrgFilter !== 'all'
-                    ? "No plans match your current filters."
-                    : "No plans are currently awaiting review."}
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                          onClick={() => {
-                            if (pendingSortBy === 'organization') {
-                              setPendingSortOrder(pendingSortOrder === 'asc' ? 'desc' : 'asc');
-                            } else {
-                              setPendingSortBy('organization');
-                              setPendingSortOrder('asc');
-                            }
-                          }}
-                        >
-                          <div className="flex items-center">
-                            Organization
-                            {pendingSortBy === 'organization' && (
-                              <span className="ml-1">
-                                {pendingSortOrder === 'asc' ? '↑' : '↓'}
-                              </span>
-                            )}
+            {planSubTab === 'analytics' && (
+              <div className="space-y-6">
+                {isLoadingAnalytics ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader className="h-8 w-8 animate-spin text-blue-600" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                      <div className="bg-white p-6 rounded-lg shadow">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-gray-500">Total Plans</p>
+                            <p className="text-3xl font-bold text-gray-900 mt-1">{totalPlans}</p>
                           </div>
-                        </th>
-                        <th
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                          onClick={() => {
-                            if (pendingSortBy === 'planner') {
-                              setPendingSortOrder(pendingSortOrder === 'asc' ? 'desc' : 'asc');
-                            } else {
-                              setPendingSortBy('planner');
-                              setPendingSortOrder('asc');
-                            }
-                          }}
-                        >
-                          <div className="flex items-center">
-                            Planner
-                            {pendingSortBy === 'planner' && (
-                              <span className="ml-1">
-                                {pendingSortOrder === 'asc' ? '↑' : '↓'}
-                              </span>
-                            )}
-                          </div>
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Executive
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Plan Type
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Fiscal Year
-                        </th>
-                        <th
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                          onClick={() => {
-                            if (pendingSortBy === 'date') {
-                              setPendingSortOrder(pendingSortOrder === 'asc' ? 'desc' : 'asc');
-                            } else {
-                              setPendingSortBy('date');
-                              setPendingSortOrder('desc');
-                            }
-                          }}
-                        >
-                          <div className="flex items-center">
-                            Submitted Date
-                            {pendingSortBy === 'date' && (
-                              <span className="ml-1">
-                                {pendingSortOrder === 'asc' ? '↑' : '↓'}
-                              </span>
-                            )}
-                          </div>
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Planning Period
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Budget Analysis
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {pendingPaginatedPlans.map((plan: any) => {
-                        const budget = plan.budget;
-                        const fundingCoverage = budget.total > 0 ? (budget.totalFunding / budget.total) * 100 : 0;
-
-                        return (
-                          <tr key={plan.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <Building2 className="h-5 w-5 text-gray-400 mr-2" />
-                                <div>
-                                  <div className="text-sm font-medium text-gray-900">
-                                    {getOrganizationName(plan)}
-                                  </div>
-                                  <div className="text-xs text-gray-500">ID: {plan.organization}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900">
-                                {plan.planner_name || 'Unknown Planner'}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900">
-                                {plan.executive_name || 'Not specified'}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                {plan.type || 'Unknown Type'}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="text-sm text-gray-900">{plan.fiscal_year || 'N/A'}</span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <Calendar className="h-4 w-4 text-gray-400 mr-2" />
-                                <div className="text-sm text-gray-500">
-                                  {plan.submitted_at ? formatDate(plan.submitted_at) : 'Not available'}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-500">
-                                {plan.from_date && plan.to_date ?
-                                  `${formatDate(plan.from_date)} - ${formatDate(plan.to_date)}` :
-                                  'Date not available'}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm">
-                                <div className="font-medium text-gray-900">
-                                  {formatCurrency(budget.total)}
-                                </div>
-                                <div className="text-gray-500">
-                                  Funding: {budget.total > 0 ? fundingCoverage.toFixed(1) : '0'}%
-                                </div>
-                                <div className="text-xs text-gray-400">
-                                  Gap: {formatCurrency(budget.gap)}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-amber-100 text-amber-800">
-                                {plan.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <button
-                                onClick={() => {
-                                  console.log('View plan details clicked:', plan);
-                                  console.log('Plan ID:', plan.id);
-                                  if (plan.id) {
-                                    navigate(`/admin/plans/${plan.id}`);
-                                  } else {
-                                    console.error('Plan ID is missing:', plan);
-                                  }
-                                }}
-                                className="text-blue-600 hover:text-blue-900 flex items-center justify-end"
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                View Details
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination for Pending Plans */}
-                {pendingTotalPages > 1 && (
-                  <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
-                    <div className="flex flex-1 justify-between sm:hidden">
-                      <button
-                        onClick={() => setPendingCurrentPage(Math.max(1, pendingCurrentPage - 1))}
-                        disabled={pendingCurrentPage === 1}
-                        className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Previous
-                      </button>
-                      <button
-                        onClick={() => setPendingCurrentPage(Math.min(pendingTotalPages, pendingCurrentPage + 1))}
-                        disabled={pendingCurrentPage === pendingTotalPages}
-                        className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Next
-                      </button>
-                    </div>
-                    <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm text-gray-700">
-                          Showing <span className="font-medium">{pendingStartIndex + 1}</span> to{' '}
-                          <span className="font-medium">
-                            {Math.min(pendingStartIndex + pendingItemsPerPage, filteredPendingPlans.length)}
-                          </span>{' '}
-                          of <span className="font-medium">{filteredPendingPlans.length}</span> results
-                        </p>
+                          <Building2 className="h-12 w-12 text-blue-600" />
+                        </div>
                       </div>
-                      <div>
-                        <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                          <button
-                            onClick={() => setPendingCurrentPage(Math.max(1, pendingCurrentPage - 1))}
-                            disabled={pendingCurrentPage === 1}
-                            className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                          >
-                            <ChevronLeft className="h-5 w-5" />
-                          </button>
-                          {Array.from({ length: Math.min(5, pendingTotalPages) }, (_, i) => {
-                            const pageNum = i + 1;
-                            return (
-                              <button
-                                key={pageNum}
-                                onClick={() => setPendingCurrentPage(pageNum)}
-                                className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                                  pageNum === pendingCurrentPage
-                                    ? 'z-10 bg-blue-600 text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'
-                                    : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
-                                }`}
-                              >
-                                {pageNum}
-                              </button>
-                            );
-                          })}
-                          <button
-                            onClick={() => setPendingCurrentPage(Math.min(pendingTotalPages, pendingCurrentPage + 1))}
-                            disabled={pendingCurrentPage === pendingTotalPages}
-                            className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                          >
-                            <ChevronRight className="h-5 w-5" />
-                          </button>
-                        </nav>
+
+                      <div className="bg-white p-6 rounded-lg shadow">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-gray-500">Pending Review</p>
+                            <p className="text-3xl font-bold text-yellow-600 mt-1">{pendingCount}</p>
+                          </div>
+                          <AlertCircle className="h-12 w-12 text-yellow-600" />
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-6 rounded-lg shadow">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-gray-500">Approved</p>
+                            <p className="text-3xl font-bold text-green-600 mt-1">{approvedCount}</p>
+                          </div>
+                          <CheckCircle className="h-12 w-12 text-green-600" />
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-6 rounded-lg shadow">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-gray-500">Rejected</p>
+                            <p className="text-3xl font-bold text-red-600 mt-1">{rejectedCount}</p>
+                          </div>
+                          <XCircle className="h-12 w-12 text-red-600" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="bg-white p-6 rounded-lg shadow">
+                        <h3 className="text-lg font-semibold mb-4">Budget Overview</h3>
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-600">Total Budget</span>
+                            <span className="font-semibold">{formatCurrency(budgetTotals.totalBudget)}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-600">Total Funding</span>
+                            <span className="font-semibold text-green-600">{formatCurrency(budgetTotals.totalFunding)}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-600">Funding Gap</span>
+                            <span className="font-semibold text-red-600">{formatCurrency(budgetTotals.fundingGap)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-6 rounded-lg shadow">
+                        <h3 className="text-lg font-semibold mb-4">Funding Sources</h3>
+                        <Doughnut
+                          data={{
+                            labels: ['Government', 'Partners', 'SDG', 'Other'],
+                            datasets: [{
+                              data: [
+                                budgetTotals.governmentTotal,
+                                budgetTotals.partnersTotal,
+                                budgetTotals.sdgTotal,
+                                budgetTotals.otherTotal
+                              ],
+                              backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6']
+                            }]
+                          }}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                              legend: { position: 'bottom' }
+                            }
+                          }}
+                          height={200}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-lg shadow">
+                      <h3 className="text-lg font-semibold mb-4">Budget by Activity Type</h3>
+                      <Bar
+                        data={{
+                          labels: Object.keys(calculateActivityTypeBudgets),
+                          datasets: [{
+                            label: 'Budget (ETB)',
+                            data: Object.values(calculateActivityTypeBudgets).map((item: any) => item.budget),
+                            backgroundColor: '#3B82F6'
+                          }]
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: { display: false }
+                          },
+                          scales: {
+                            y: {
+                              beginAtZero: true,
+                              ticks: {
+                                callback: (value) => formatCurrency(Number(value))
+                              }
+                            }
+                          }
+                        }}
+                        height={300}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {planSubTab === 'pending' && (
+              <div className="bg-white rounded-lg shadow">
+                <div className="p-6 border-b border-gray-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                    <h3 className="text-lg font-semibold">Pending Reviews</h3>
+                    <div className="flex items-center space-x-2">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="Search..."
+                          value={pendingSearch}
+                          onChange={(e) => setPendingSearch(e.target.value)}
+                          className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
                       </div>
                     </div>
                   </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Reviewed Plans Tab */}
-          {planSubTab === 'reviewed' && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0">
-              <div>
-                <h3 className="text-lg font-medium leading-6 text-gray-900">Reviewed Plans</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  All plans that have been reviewed (approved or rejected)
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
-                <div className="flex items-center space-x-2">
-                  <Search className="h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search planner or organization..."
-                    value={reviewedSearch}
-                    onChange={(e) => setReviewedSearch(e.target.value)}
-                    className="text-sm border border-gray-300 rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
                 </div>
-                <select
-                  value={reviewedFilter}
-                  onChange={(e) => setReviewedFilter(e.target.value)}
-                  className="text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                >
-                  <option value="all">All Status</option>
-                  <option value="APPROVED">Approved</option>
-                  <option value="REJECTED">Rejected</option>
-                </select>
-        <select
-  value={reviewedOrgFilter}
-  onChange={(e) => setReviewedOrgFilter(e.target.value)}
-  className="text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
->
-  <option value="all">
-    {adminOrgType === 'MINISTER' ? 'All Executives' : 'All Hierarchy Executives'}
-  </option>
-  {Object.entries(organizationsMap)
-    .filter(([id]) =>
-      adminOrgType === 'MINISTER' || allowedOrgIds.includes(Number(id))
-    )
-    .map(([id, name]) => (
-      <option key={id} value={id}>{name}</option>
-    ))}
-</select>
-                <button
-                  onClick={() => refetch()}
-                  className="flex items-center px-3 py-2 text-sm text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md">
 
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
-                </button>
-              </div>
-            </div>
-
-            {filteredReviewedPlans.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                <ClipboardCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-1">No reviewed plans found</h3>
-                <p className="text-gray-500">No plans match your current filters.</p>
-              </div>
-            ) : (
-              <>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                          onClick={() => {
-                            if (reviewedSortBy === 'organization') {
-                              setReviewedSortOrder(reviewedSortOrder === 'asc' ? 'desc' : 'asc');
-                            } else {
-                              setReviewedSortBy('organization');
-                              setReviewedSortOrder('asc');
-                            }
-                          }}
-                        >
-                          <div className="flex items-center">
-                            Organization
-                            {reviewedSortBy === 'organization' && (
-                              <span className="ml-1">
-                                {reviewedSortOrder === 'asc' ? '↑' : '↓'}
-                              </span>
-                            )}
-                          </div>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Organization
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Planner
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Plan Type
-                        </th>
-                        <th
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                          onClick={() => {
-                            if (reviewedSortBy === 'date') {
-                              setReviewedSortOrder(reviewedSortOrder === 'asc' ? 'desc' : 'asc');
-                            } else {
-                              setReviewedSortBy('date');
-                              setReviewedSortOrder('desc');
-                            }
-                          }}
-                        >
-                          <div className="flex items-center">
-                            Submitted Date
-                            {reviewedSortBy === 'date' && (
-                              <span className="ml-1">
-                                {reviewedSortOrder === 'asc' ? '↑' : '↓'}
-                              </span>
-                            )}
-                          </div>
-                        </th>
-                        <th
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                          onClick={() => {
-                            if (reviewedSortBy === 'status') {
-                              setReviewedSortOrder(reviewedSortOrder === 'asc' ? 'desc' : 'asc');
-                            } else {
-                              setReviewedSortBy('status');
-                              setReviewedSortOrder('asc');
-                            }
-                          }}
-                        >
-                          <div className="flex items-center">
-                            Status
-                            {reviewedSortBy === 'status' && (
-                              <span className="ml-1">
-                                {reviewedSortOrder === 'asc' ? '↑' : '↓'}
-                              </span>
-                            )}
-                          </div>
+                          Submitted
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Budget Analysis
-                        </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Actions
                         </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {reviewedPaginatedPlans.map((plan: any) => {
-                        const budget = plan.budget;
-                        const fundingCoverage = budget.total > 0 ? (budget.totalFunding / budget.total) * 100 : 0;
-
-                        return (
+                      {isLoadingPlans ? (
+                        <tr>
+                          <td colSpan={4} className="px-6 py-12 text-center">
+                            <Loader className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
+                          </td>
+                        </tr>
+                      ) : paginatedPendingPlans.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
+                            No pending plans found
+                          </td>
+                        </tr>
+                      ) : (
+                        paginatedPendingPlans.map((plan: any) => (
                           <tr key={plan.id} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <Building2 className="h-5 w-5 text-gray-400 mr-2" />
-                                <span className="text-sm font-medium text-gray-900">
-                                  {getOrganizationName(plan)}
-                                </span>
+                              <div className="text-sm font-medium text-gray-900">
+                                {getOrganizationName(plan)}
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {plan.planner_name || 'Unknown Planner'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {plan.type || 'N/A'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {plan.submitted_at ? formatDate(plan.submitted_at) : 'Not submitted'}
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">{plan.planner_name}</div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                plan.status === 'APPROVED' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                              }`}>
+                              <div className="text-sm text-gray-500">
+                                {plan.submitted_at ? format(new Date(plan.submitted_at), 'MMM d, yyyy') : 'N/A'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <button
+                                onClick={() => navigate(`/admin/plans/${plan.id}`)}
+                                className="text-blue-600 hover:text-blue-900 inline-flex items-center"
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                Review
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {pendingTotalPages > 1 && (
+                  <div className="px-6 py-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-gray-500">
+                        Showing {(pendingCurrentPage - 1) * pendingItemsPerPage + 1} to{' '}
+                        {Math.min(pendingCurrentPage * pendingItemsPerPage, filteredPendingPlans.length)} of{' '}
+                        {filteredPendingPlans.length} results
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => setPendingCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={pendingCurrentPage === 1}
+                          className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => setPendingCurrentPage(p => Math.min(pendingTotalPages, p + 1))}
+                          disabled={pendingCurrentPage === pendingTotalPages}
+                          className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {planSubTab === 'reviewed' && (
+              <div className="bg-white rounded-lg shadow">
+                <div className="p-6 border-b border-gray-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                    <h3 className="text-lg font-semibold">Reviewed Plans</h3>
+                    <div className="flex items-center space-x-2">
+                      <select
+                        value={reviewedFilter}
+                        onChange={(e) => setReviewedFilter(e.target.value)}
+                        className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="all">All Statuses</option>
+                        <option value="APPROVED">Approved</option>
+                        <option value="REJECTED">Rejected</option>
+                        <option value="SUBMITTED">Submitted</option>
+                      </select>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="Search..."
+                          value={reviewedSearch}
+                          onChange={(e) => setReviewedSearch(e.target.value)}
+                          className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Organization
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Planner
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Date
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {isLoadingPlans ? (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-12 text-center">
+                            <Loader className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
+                          </td>
+                        </tr>
+                      ) : paginatedReviewedPlans.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                            No plans found
+                          </td>
+                        </tr>
+                      ) : (
+                        paginatedReviewedPlans.map((plan: any) => (
+                          <tr key={plan.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">
+                                {getOrganizationName(plan)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">{plan.planner_name}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span
+                                className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                  plan.status === 'APPROVED'
+                                    ? 'bg-green-100 text-green-800'
+                                    : plan.status === 'REJECTED'
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-yellow-100 text-yellow-800'
+                                }`}
+                              >
                                 {plan.status}
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm">
-                                <div className="font-medium text-gray-900">
-                                  {formatCurrency(budget.total)}
-                                </div>
-                                <div className="text-gray-500">
-                                  Funding: {fundingCoverage.toFixed(1)}%
-                                </div>
-                                <div className="text-xs text-gray-400">
-                                  Gap: {formatCurrency(budget.gap)}
-                                </div>
+                              <div className="text-sm text-gray-500">
+                                {plan.submitted_at ? format(new Date(plan.submitted_at), 'MMM d, yyyy') : 'N/A'}
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
                               <button
-                                onClick={() => {
-                                  console.log('View plan clicked:', plan);
-                                  console.log('Plan ID:', plan.id);
-                                  if (plan.id) {
-                                    navigate(`/admin/plans/${plan.id}`);
-                                  } else {
-                                    console.error('Plan ID is missing:', plan);
-                                  }
-                                }}
-                                className="text-blue-600 hover:text-blue-900 flex items-center"
+                                onClick={() => navigate(`/admin/plans/${plan.id}`)}
+                                className="text-blue-600 hover:text-blue-900 inline-flex items-center"
                               >
                                 <Eye className="h-4 w-4 mr-1" />
                                 View
                               </button>
                             </td>
                           </tr>
-                        );
-                      })}
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
 
-                {/* Pagination for Reviewed Plans */}
                 {reviewedTotalPages > 1 && (
-                  <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
-                    <div className="flex flex-1 justify-between sm:hidden">
-                      <button
-                        onClick={() => setReviewedCurrentPage(Math.max(1, reviewedCurrentPage - 1))}
-                        disabled={reviewedCurrentPage === 1}
-                        className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Previous
-                      </button>
-                      <button
-                        onClick={() => setReviewedCurrentPage(Math.min(reviewedTotalPages, reviewedCurrentPage + 1))}
-                        disabled={reviewedCurrentPage === reviewedTotalPages}
-                        className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Next
-                      </button>
-                    </div>
-                    <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm text-gray-700">
-                          Showing <span className="font-medium">{reviewedStartIndex + 1}</span> to{' '}
-                          <span className="font-medium">
-                            {Math.min(reviewedStartIndex + reviewedItemsPerPage, filteredReviewedPlans.length)}
-                          </span>{' '}
-                          of <span className="font-medium">{filteredReviewedPlans.length}</span> results
-                        </p>
+                  <div className="px-6 py-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-gray-500">
+                        Showing {(reviewedCurrentPage - 1) * reviewedItemsPerPage + 1} to{' '}
+                        {Math.min(reviewedCurrentPage * reviewedItemsPerPage, filteredReviewedPlans.length)} of{' '}
+                        {filteredReviewedPlans.length} results
                       </div>
-                      <div>
-                        <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                          <button
-                            onClick={() => setReviewedCurrentPage(Math.max(1, reviewedCurrentPage - 1))}
-                            disabled={reviewedCurrentPage === 1}
-                            className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                          >
-                            <ChevronLeft className="h-5 w-5" />
-                          </button>
-                          {Array.from({ length: Math.min(5, reviewedTotalPages) }, (_, i) => {
-                            const pageNum = i + 1;
-                            return (
-                              <button
-                                key={pageNum}
-                                onClick={() => setReviewedCurrentPage(pageNum)}
-                                className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                                  pageNum === reviewedCurrentPage
-                                    ? 'z-10 bg-blue-600 text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'
-                                    : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
-                                }`}
-                              >
-                                {pageNum}
-                              </button>
-                            );
-                          })}
-                          <button
-                            onClick={() => setReviewedCurrentPage(Math.min(reviewedTotalPages, reviewedCurrentPage + 1))}
-                            disabled={reviewedCurrentPage === reviewedTotalPages}
-                            className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                          >
-                            <ChevronRight className="h-5 w-5" />
-                          </button>
-                        </nav>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => setReviewedCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={reviewedCurrentPage === 1}
+                          className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => setReviewedCurrentPage(p => Math.min(reviewedTotalPages, p + 1))}
+                          disabled={reviewedCurrentPage === reviewedTotalPages}
+                          className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
                   </div>
                 )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Budget by Activity Tab */}
-          {planSubTab === 'budget-activity' && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h3 className="text-lg font-medium leading-6 text-gray-900">Budget by Activity Type</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  Activity counts and budgets by Executives
-                </p>
-              </div>
-            </div>
-
-            {budgetByActivityData.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-1">No activity data found</h3>
-                <p className="text-gray-500">No budget activities have been recorded yet.</p>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Executive Name
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Training
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Meeting
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Workshop
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Procurement
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Printing
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Other
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total Count
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total Budget
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {budgetActivityPaginatedData.map((orgData: any, index) => (
-                        <tr key={index} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <Building2 className="h-5 w-5 text-gray-400 mr-2" />
-                              <span className="text-sm font-medium text-gray-900">
-                                {orgData.organizationName}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {orgData.Training.count}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              {orgData.Meeting.count}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                              {orgData.Workshop.count}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
-                              {orgData.Procurement.count}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-pink-100 text-pink-800">
-                              {orgData.Printing.count}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                              {orgData.Other.count}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className="text-sm font-medium text-gray-900">
-                              {orgData.totalCount}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className="text-sm font-medium text-green-600">
-                              {formatCurrency(orgData.totalBudget)}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination for Budget by Activity */}
-                {budgetActivityTotalPages > 1 && (
-                  <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
-                    <div className="flex flex-1 justify-between sm:hidden">
-                      <button
-                        onClick={() => setBudgetActivityCurrentPage(Math.max(1, budgetActivityCurrentPage - 1))}
-                        disabled={budgetActivityCurrentPage === 1}
-                        className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Previous
-                      </button>
-                      <button
-                        onClick={() => setBudgetActivityCurrentPage(Math.min(budgetActivityTotalPages, budgetActivityCurrentPage + 1))}
-                        disabled={budgetActivityCurrentPage === budgetActivityTotalPages}
-                        className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Next
-                      </button>
-                    </div>
-                    <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm text-gray-700">
-                          Showing <span className="font-medium">{budgetActivityStartIndex + 1}</span> to{' '}
-                          <span className="font-medium">
-                            {Math.min(budgetActivityStartIndex + budgetActivityItemsPerPage, budgetByActivityData.length)}
-                          </span>{' '}
-                          of <span className="font-medium">{budgetByActivityData.length}</span> results
-                        </p>
-                      </div>
-                      <div>
-                        <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm">
-                          <button
-                            onClick={() => setBudgetActivityCurrentPage(Math.max(1, budgetActivityCurrentPage - 1))}
-                            disabled={budgetActivityCurrentPage === 1}
-                            className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50"
-                          >
-                            <ChevronLeft className="h-5 w-5" />
-                          </button>
-                          {Array.from({ length: Math.min(5, budgetActivityTotalPages) }, (_, i) => {
-                            const pageNum = i + 1;
-                            return (
-                              <button
-                                key={pageNum}
-                                onClick={() => setBudgetActivityCurrentPage(pageNum)}
-                                className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                                  pageNum === budgetActivityCurrentPage
-                                    ? 'z-10 bg-blue-600 text-white'
-                                    : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'
-                                }`}
-                              >
-                                {pageNum}
-                              </button>
-                            );
-                          })}
-                          <button
-                            onClick={() => setBudgetActivityCurrentPage(Math.min(budgetActivityTotalPages, budgetActivityCurrentPage + 1))}
-                            disabled={budgetActivityCurrentPage === budgetActivityTotalPages}
-                            className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50"
-                          >
-                            <ChevronRight className="h-5 w-5" />
-                          </button>
-                        </nav>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Analytics Tab */}
-          {planSubTab === 'analytics' && (
-        <div className="space-y-8">
-          {/* Complete Budget Overview by Executives */}
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-              <BarChart3 className="h-5 w-5 mr-2 text-blue-600" />
-              Complete Budget Overview by Executives
-            </h3>
-            <p className="text-sm text-gray-600 mb-6">
-              Budget analysis for organizations with submitted and approved plans
-            </p>
-            {completeBudgetOverview.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-1">No budget data available</h3>
-                <p className="text-gray-500">No Executives have submitted or approved plans with budget data.</p>
-              </div>
-            ) : (
-              <div className="h-96">
-                <Bar
-                  data={completeBudgetChartData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'top' as const,
-                      },
-                      title: {
-                        display: true,
-                        text: `Budget Overview - ${completeBudgetOverview.length} Organizations`
-                      }
-                    },
-                    scales: {
-                      x: {
-                        title: {
-                          display: true,
-                          text: 'Organizations'
-                        },
-                        ticks: {
-                          maxRotation: 45,
-                          minRotation: 45
-                        }
-                      },
-                      y: {
-                        title: {
-                          display: true,
-                          text: 'Budget Amount (ETB)'
-                        },
-                        ticks: {
-                          callback: function(value) {
-                            return 'ETB ' + Number(value).toLocaleString();
-                          }
-                        }
-                      }
-                    },
-                    interaction: {
-                      intersect: false,
-                      mode: 'index' as const
-                    }
-                  }}
-                />
               </div>
             )}
           </div>
+        )}
 
-          {/* Other Analytics Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Plan Status Distribution */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                <PieChart className="h-5 w-5 mr-2 text-blue-600" />
-                Plan Status Distribution
-              </h3>
-              <div className="h-64">
-                <Doughnut
-                  data={planStatusChartData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'bottom' as const,
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Budget & Funding Distribution */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                <DollarSign className="h-5 w-5 mr-2 text-green-600" />
-                Budget & Funding Distribution
-              </h3>
-              <div className="h-64">
-                <Doughnut
-                  data={budgetDistributionChartData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'bottom' as const,
-                      }
-                    }
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Monthly Submission Trends */}
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-              <TrendingUp className="h-5 w-5 mr-2 text-purple-600" />
-              Monthly Submission Trends
-            </h3>
-            <div className="h-80">
-              <Line
-                data={monthlyTrendsChartData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  interaction: {
-                    mode: 'index' as const,
-                    intersect: false,
-                  },
-                  scales: {
-                    x: {
-                      display: true,
-                      title: {
-                        display: true,
-                        text: 'Month'
-                      }
-                    },
-                    y: {
-                      type: 'linear' as const,
-                      display: true,
-                      position: 'left' as const,
-                      title: {
-                        display: true,
-                        text: 'Number of Submissions'
-                      }
-                    },
-                    y1: {
-                      type: 'linear' as const,
-                      display: true,
-                      position: 'right' as const,
-                      title: {
-                        display: true,
-                        text: 'Budget Amount (ETB)'
-                      },
-                      grid: {
-                        drawOnChartArea: false,
-                      },
-                    }
-                  }
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Executive Performance Tab */}
-          {planSubTab === 'executive-performance' && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h3 className="text-lg font-medium leading-6 text-gray-900">Executive Performance Overview</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  Comprehensive performance metrics for all executive organizations
-                </p>
-              </div>
-            </div>
-
-            {executivePerformanceData.length === 0 ? (
-              <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                <Briefcase className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-1">No performance data available</h3>
-                <p className="text-gray-500">No executive performance data has been recorded yet.</p>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Organization Name
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total Plans
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Approved
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Submitted
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total Budget
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Available Funding
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Government Budget
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          SDG Budget
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Partners Budget
-                        </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Funding Gap
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {executivePaginatedData.map((execData: any, index) => (
-                        <tr key={index} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <Building2 className="h-5 w-5 text-gray-400 mr-2" />
-                              <span className="text-sm font-medium text-gray-900">
-                                {execData.organizationName}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-900">
-                            {execData.totalPlans}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              {execData.approved}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                              {execData.submitted}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">
-                            {formatCurrency(execData.totalBudget)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-green-600">
-                            {formatCurrency(execData.availableFunding)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-blue-600">
-                            {formatCurrency(execData.governmentBudget)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-purple-600">
-                            {formatCurrency(execData.sdgBudget)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium text-orange-600">
-                            {formatCurrency(execData.partnersBudget)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                            <span className={execData.fundingGap > 0 ? 'text-red-600' : 'text-green-600'}>
-                              {formatCurrency(execData.fundingGap)}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination for Executive Performance */}
-                {executiveTotalPages > 1 && (
-                  <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
-                    <div className="flex flex-1 justify-between sm:hidden">
-                      <button
-                        onClick={() => setExecutiveCurrentPage(Math.max(1, executiveCurrentPage - 1))}
-                        disabled={executiveCurrentPage === 1}
-                        className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Previous
-                      </button>
-                      <button
-                        onClick={() => setExecutiveCurrentPage(Math.min(executiveTotalPages, executiveCurrentPage + 1))}
-                        disabled={executiveCurrentPage === executiveTotalPages}
-                        className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Next
-                      </button>
-                    </div>
-                    <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm text-gray-700">
-                          Showing <span className="font-medium">{executiveStartIndex + 1}</span> to{' '}
-                          <span className="font-medium">
-                            {Math.min(executiveStartIndex + executiveItemsPerPage, executivePerformanceData.length)}
-                          </span>{' '}
-                          of <span className="font-medium">{executivePerformanceData.length}</span> results
-                        </p>
-                      </div>
-                      <div>
-                        <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm">
-                          <button
-                            onClick={() => setExecutiveCurrentPage(Math.max(1, executiveCurrentPage - 1))}
-                            disabled={executiveCurrentPage === 1}
-                            className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50"
-                          >
-                            <ChevronLeft className="h-5 w-5" />
-                          </button>
-                          {Array.from({ length: Math.min(5, executiveTotalPages) }, (_, i) => {
-                            const pageNum = i + 1;
-                            return (
-                              <button
-                                key={pageNum}
-                                onClick={() => setExecutiveCurrentPage(pageNum)}
-                                className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                                  pageNum === executiveCurrentPage
-                                    ? 'z-10 bg-blue-600 text-white'
-                                    : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'
-                                }`}
-                              >
-                                {pageNum}
-                              </button>
-                            );
-                          })}
-                          <button
-                            onClick={() => setExecutiveCurrentPage(Math.min(executiveTotalPages, executiveCurrentPage + 1))}
-                            disabled={executiveCurrentPage === executiveTotalPages}
-                            className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50"
-                          >
-                            <ChevronRight className="h-5 w-5" />
-                          </button>
-                        </nav>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Reports Tab */}
-        </>
-      )}
-
-      {/* Report Content */}
-      {mainTab === 'reports' && (
-        <ReportsTabContent reportSubTab={reportSubTab} />
-      )}
+        {mainTab === 'reports' && (
+          <ReportsTabContent
+            reportSubTab={reportSubTab}
+            setReportSubTab={setReportSubTab}
+          />
+        )}
+      </div>
     </div>
   );
 };

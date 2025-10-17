@@ -1639,6 +1639,48 @@ class PlanViewSet(viewsets.ModelViewSet):
             logger.exception(f"Error rejecting plan {pk}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def _get_child_organizations(self, parent_org_id, all_orgs):
+        """
+        Recursively get all child organizations of a parent organization
+        """
+        child_ids = [parent_org_id]
+
+        def get_descendants(org_id):
+            children = [org.id for org in all_orgs if org.parent_id == org_id]
+            for child_id in children:
+                child_ids.append(child_id)
+                get_descendants(child_id)
+
+        get_descendants(parent_org_id)
+        return child_ids
+
+    def _get_admin_filtered_orgs(self, request):
+        """
+        Get the list of organization IDs that the admin can access based on hierarchy
+        Returns (admin_org_id, admin_org_type, allowed_org_ids)
+        """
+        user_organizations = OrganizationUser.objects.filter(
+            user=request.user,
+            role='ADMIN'
+        ).select_related('organization').first()
+
+        if not user_organizations:
+            return None, None, []
+
+        admin_org = user_organizations.organization
+        admin_org_id = admin_org.id
+        admin_org_type = admin_org.type
+
+        # If Minister, return all organizations
+        if admin_org_type == 'MINISTER':
+            return admin_org_id, admin_org_type, None
+
+        # For other organization types, get all descendants
+        all_orgs = list(Organization.objects.all())
+        allowed_org_ids = self._get_child_organizations(admin_org_id, all_orgs)
+
+        return admin_org_id, admin_org_type, allowed_org_ids
+
     @action(detail=False, methods=['get'])
     def pending_reviews(self, request):
         """Get plans pending review"""
@@ -1654,10 +1696,18 @@ class PlanViewSet(viewsets.ModelViewSet):
                 ).prefetch_related('reviews', 'selected_objectives')
                 logger.info(f"Evaluator {request.user.username} accessing {plans.count()} pending plans")
             elif 'ADMIN' in user_roles:
-                # Admins can also see all submitted plans
-                plans = Plan.objects.filter(status='SUBMITTED').select_related(
+                # Admins see plans based on their organization hierarchy
+                admin_org_id, admin_org_type, allowed_org_ids = self._get_admin_filtered_orgs(request)
+
+                plans_query = Plan.objects.filter(status='SUBMITTED').select_related(
                     'organization', 'strategic_objective'
                 ).prefetch_related('reviews', 'selected_objectives')
+
+                # Filter by organization hierarchy
+                if admin_org_type != 'MINISTER' and allowed_org_ids:
+                    plans_query = plans_query.filter(organization__in=allowed_org_ids)
+
+                plans = plans_query
                 logger.info(f"Admin {request.user.username} accessing {plans.count()} pending plans")
             else:
                 # For planners and others, use the normal filtered queryset
@@ -1668,6 +1718,108 @@ class PlanViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         except Exception as e:
             logger.exception("Error fetching pending reviews")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='admin-analytics')
+    def admin_analytics(self, request):
+        """
+        Get comprehensive analytics data for admin dashboard
+        Filters data based on admin's organization hierarchy
+        """
+        try:
+            user_organizations = OrganizationUser.objects.filter(user=request.user)
+            user_roles = user_organizations.values_list('role', flat=True)
+
+            if 'ADMIN' not in user_roles:
+                return Response(
+                    {'error': 'Only admins can access this endpoint'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Get admin's organization filtering
+            admin_org_id, admin_org_type, allowed_org_ids = self._get_admin_filtered_orgs(request)
+
+            # Base query for plans
+            plans_query = Plan.objects.select_related('organization', 'strategic_objective')
+
+            # Apply organization hierarchy filtering
+            if admin_org_type != 'MINISTER' and allowed_org_ids:
+                plans_query = plans_query.filter(organization__in=allowed_org_ids)
+
+            # Get all plans
+            all_plans = plans_query
+
+            # Get plans by status
+            submitted_approved_plans = plans_query.filter(status__in=['SUBMITTED', 'APPROVED'])
+
+            # Get sub-activities with proper filtering
+            subactivities_query = SubActivity.objects.select_related('main_activity')
+
+            if admin_org_type != 'MINISTER' and allowed_org_ids:
+                # Filter sub-activities through main activities' organization
+                subactivities_query = subactivities_query.filter(
+                    main_activity__organization__in=allowed_org_ids
+                )
+
+            sub_activities = subactivities_query
+
+            # Filter sub-activities for organizations with submitted/approved plans
+            org_ids_with_plans = submitted_approved_plans.values_list('organization', flat=True)
+            filtered_sub_activities = sub_activities.filter(
+                main_activity__organization__in=org_ids_with_plans
+            )
+
+            # Calculate budget totals
+            budget_data = filtered_sub_activities.aggregate(
+                total_with_tool=Sum('estimated_cost_with_tool'),
+                total_without_tool=Sum('estimated_cost_without_tool'),
+                total_government=Sum('government_treasury'),
+                total_partners=Sum('partners_funding'),
+                total_sdg=Sum('sdg_funding'),
+                total_other=Sum('other_funding')
+            )
+
+            # Calculate activity type budgets
+            activity_budgets = {}
+            for activity_type in ['Training', 'Meeting', 'Workshop', 'Supervision', 'Procurement', 'Printing', 'Other']:
+                type_activities = filtered_sub_activities.filter(activity_type=activity_type)
+                activity_budgets[activity_type] = {
+                    'count': type_activities.count(),
+                    'budget': sum(
+                        float(sa.estimated_cost_with_tool if sa.budget_calculation_type == 'WITH_TOOL'
+                              else sa.estimated_cost_without_tool)
+                        for sa in type_activities
+                    )
+                }
+
+            # Count plans by status
+            total_plans = submitted_approved_plans.count()
+            pending_count = plans_query.filter(status='SUBMITTED').count()
+            approved_count = plans_query.filter(status='APPROVED').count()
+            rejected_count = plans_query.filter(status='REJECTED').count()
+
+            response_data = {
+                'total_plans': total_plans,
+                'pending_count': pending_count,
+                'approved_count': approved_count,
+                'rejected_count': rejected_count,
+                'budget_totals': {
+                    'total_with_tool': float(budget_data['total_with_tool'] or 0),
+                    'total_without_tool': float(budget_data['total_without_tool'] or 0),
+                    'government_total': float(budget_data['total_government'] or 0),
+                    'partners_total': float(budget_data['total_partners'] or 0),
+                    'sdg_total': float(budget_data['total_sdg'] or 0),
+                    'other_total': float(budget_data['total_other'] or 0)
+                },
+                'activity_budgets': activity_budgets,
+                'admin_org_type': admin_org_type,
+                'filtered': admin_org_type != 'MINISTER'
+            }
+
+            return Response(response_data)
+
+        except Exception as e:
+            logger.exception("Error in admin_analytics")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['get'], url_path='admin-detail')
