@@ -1200,9 +1200,62 @@ class SubActivityViewSet(viewsets.ModelViewSet):
             'main_activity__initiative__organization',
             'main_activity__organization'
         ).all()
+
+        user = self.request.user
+
+        # Get user's organizations and role
+        user_organizations = OrganizationUser.objects.filter(user=user)
+
+        if user_organizations.exists():
+            user_roles = user_organizations.values_list('role', flat=True)
+            user_org_ids = list(user_organizations.values_list('organization', flat=True))
+
+            # Helper function to get all child organizations recursively
+            def get_child_organizations(parent_org_id):
+                child_ids = [parent_org_id]
+
+                def get_descendants(org_id):
+                    children = Organization.objects.filter(parent_id=org_id).values_list('id', flat=True)
+                    for child_id in children:
+                        if child_id not in child_ids:
+                            child_ids.append(child_id)
+                            get_descendants(child_id)
+
+                get_descendants(parent_org_id)
+                return child_ids
+
+            # ADMIN users can see sub-activities from their organization hierarchy
+            if 'ADMIN' in user_roles:
+                admin_org = user_organizations.first().organization
+                admin_org_id = admin_org.id
+
+                # Get all child organizations in the hierarchy
+                allowed_org_ids = get_child_organizations(admin_org_id)
+
+                # Filter sub-activities by organization through main_activity -> initiative -> organization
+                queryset = queryset.filter(
+                    Q(main_activity__initiative__organization__in=allowed_org_ids) |
+                    Q(main_activity__organization__in=allowed_org_ids)
+                )
+                logger.info(f"Admin {user.username} accessing sub-activities from organization hierarchy: {allowed_org_ids}")
+
+            # EVALUATOR users can see all sub-activities (no filtering)
+            elif 'EVALUATOR' in user_roles:
+                # No filtering for evaluators
+                pass
+
+            # PLANNER users can only see sub-activities from their own organizations
+            elif 'PLANNER' in user_roles:
+                queryset = queryset.filter(
+                    Q(main_activity__initiative__organization__in=user_org_ids) |
+                    Q(main_activity__organization__in=user_org_ids)
+                )
+                logger.info(f"Planner {user.username} accessing sub-activities from orgs: {user_org_ids}")
+
         main_activity = self.request.query_params.get('main_activity', None)
         if main_activity is not None:
             queryset = queryset.filter(main_activity=main_activity)
+
         return queryset
 
     @action(detail=True, methods=['post'])
