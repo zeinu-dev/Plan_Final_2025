@@ -3297,27 +3297,14 @@ def budget_by_activity_summary(request):
         from django.db.models import Q, Sum, Count, Case, When, DecimalField, F
         from decimal import Decimal
 
-        # Get approved plans with their organizations
-        approved_plans = Plan.objects.filter(status='APPROVED').select_related('organization').values(
-            'id', 'organization_id', 'organization__name'
-        ).distinct()
-
-        logger.info(f"Found {len(approved_plans)} approved plans")
-
-        # Create mapping of plan to organization
-        plan_to_org = {}
-        for plan in approved_plans:
-            plan_to_org[plan['id']] = {
-                'org_id': plan['organization_id'],
-                'org_name': plan['organization__name']
-            }
-
-        logger.info(f"Plan to org mapping has {len(plan_to_org)} plans")
-
-        # Get sub-activities for approved plans
+        # Get sub-activities grouped by organization and activity type for approved plans
         sub_activities = SubActivity.objects.filter(
-            main_activity__initiative__strategic_objective__plan__id__in=plan_to_org.keys()
-        ).values('main_activity__initiative__strategic_objective__plan__id', 'activity_type').annotate(
+            main_activity__initiative__strategic_objective__plans__status='APPROVED'
+        ).select_related('main_activity__initiative__strategic_objective').values(
+            'main_activity__initiative__strategic_objective__plans__organization_id',
+            'main_activity__initiative__strategic_objective__plans__organization__name',
+            'activity_type'
+        ).annotate(
             count=Count('id'),
             with_tool_sum=Sum(
                 Case(
@@ -3342,17 +3329,16 @@ def budget_by_activity_summary(request):
 
         # Populate data
         for item in sub_activities:
-            plan_id = item['main_activity__initiative__strategic_objective__plan__id']
-            if plan_id not in plan_to_org:
-                continue
+            org_id = item['main_activity__initiative__strategic_objective__plans__organization_id']
+            org_name = item['main_activity__initiative__strategic_objective__plans__organization__name']
 
-            org_info = plan_to_org[plan_id]
-            org_id = org_info['org_id']
+            if not org_id:
+                continue
 
             if org_id not in org_map:
                 org_map[org_id] = {
                     'organization_id': org_id,
-                    'organization_name': org_info['org_name'] or f'ORG-{org_id}',
+                    'organization_name': org_name or f'ORG-{org_id}',
                     'organization_code': f'ORG-{org_id:04d}',
                     'Meeting / Workshop': {'count': 0, 'budget': 0},
                     'Training': {'count': 0, 'budget': 0},
@@ -3394,27 +3380,13 @@ def executive_performance_summary(request):
         from django.db.models import Q, Sum, Count, Case, When, DecimalField, F
         from decimal import Decimal
 
-        # Get approved plans with their organizations
-        approved_plans = Plan.objects.filter(status='APPROVED').select_related('organization').values(
-            'id', 'organization_id', 'organization__name'
-        ).distinct()
-
-        logger.info(f"Executive perf: Found {len(approved_plans)} approved plans")
-
-        # Create mapping of plan to organization
-        plan_to_org = {}
-        for plan in approved_plans:
-            plan_to_org[plan['id']] = {
-                'org_id': plan['organization_id'],
-                'org_name': plan['organization__name']
-            }
-
-        logger.info(f"Executive perf: Plan to org mapping has {len(plan_to_org)} plans")
-
-        # Get budget data for approved plans
+        # Get budget data grouped by organization for approved plans
         budget_data = SubActivity.objects.filter(
-            main_activity__initiative__strategic_objective__plan__id__in=plan_to_org.keys()
-        ).values('main_activity__initiative__strategic_objective__plan__id').annotate(
+            main_activity__initiative__strategic_objective__plans__status='APPROVED'
+        ).values(
+            'main_activity__initiative__strategic_objective__plans__organization_id',
+            'main_activity__initiative__strategic_objective__plans__organization__name'
+        ).annotate(
             total_cost=Sum(
                 Case(
                     When(budget_calculation_type='WITH_TOOL', then=F('estimated_cost_with_tool')),
@@ -3434,17 +3406,16 @@ def executive_performance_summary(request):
 
         # Populate budget data
         for item in budget_data:
-            plan_id = item['main_activity__initiative__strategic_objective__plan__id']
-            if plan_id not in plan_to_org:
-                continue
+            org_id = item['main_activity__initiative__strategic_objective__plans__organization_id']
+            org_name = item['main_activity__initiative__strategic_objective__plans__organization__name']
 
-            org_info = plan_to_org[plan_id]
-            org_id = org_info['org_id']
+            if not org_id:
+                continue
 
             if org_id not in org_performance:
                 org_performance[org_id] = {
                     'organization_id': org_id,
-                    'organization_name': org_info['org_name'] or f'ORG-{org_id}',
+                    'organization_name': org_name or f'ORG-{org_id}',
                     'organization_code': f'ORG-{org_id:04d}',
                     'total_plans': 0,
                     'approved': 0,
