@@ -45,9 +45,32 @@ const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
 
-  const [mainTab, setMainTab] = useState<'plans' | 'reports'>('plans');
-  const [planSubTab, setPlansSubTab] = useState<'analytics' | 'pending' | 'reviewed' | 'budget-activity' | 'executive-performance'>('analytics');
-  const [reportSubTab, setReportSubTab] = useState<'performance-overview' | 'approved-reports' | 'budget-utilization'>('performance-overview');
+  // Initialize tabs from localStorage to persist state on refresh
+  const [mainTab, setMainTab] = useState<'plans' | 'reports'>(() => {
+    const saved = localStorage.getItem('adminDashboard_mainTab');
+    return (saved as 'plans' | 'reports') || 'plans';
+  });
+  const [planSubTab, setPlansSubTab] = useState<'analytics' | 'pending' | 'reviewed' | 'budget-activity' | 'executive-performance'>(() => {
+    const saved = localStorage.getItem('adminDashboard_planSubTab');
+    return (saved as 'analytics' | 'pending' | 'reviewed' | 'budget-activity' | 'executive-performance') || 'analytics';
+  });
+  const [reportSubTab, setReportSubTab] = useState<'performance-overview' | 'approved-reports' | 'budget-utilization'>(() => {
+    const saved = localStorage.getItem('adminDashboard_reportSubTab');
+    return (saved as 'performance-overview' | 'approved-reports' | 'budget-utilization') || 'performance-overview';
+  });
+
+  // Persist tab changes to localStorage
+  useEffect(() => {
+    localStorage.setItem('adminDashboard_mainTab', mainTab);
+  }, [mainTab]);
+
+  useEffect(() => {
+    localStorage.setItem('adminDashboard_planSubTab', planSubTab);
+  }, [planSubTab]);
+
+  useEffect(() => {
+    localStorage.setItem('adminDashboard_reportSubTab', reportSubTab);
+  }, [reportSubTab]);
 
   const [reviewedFilter, setReviewedFilter] = useState('all');
   const [reviewedOrgFilter, setReviewedOrgFilter] = useState('all');
@@ -1113,7 +1136,7 @@ const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {isLoadingSubActivities ? (
+                  {isLoadingBudgetActivity ? (
                     <tr>
                       <td colSpan={8} className="px-6 py-12 text-center">
                         <Loader className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
@@ -1205,7 +1228,7 @@ const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {isLoadingSubActivities ? (
+                  {isLoadingExecutivePerf ? (
                     <tr>
                       <td colSpan={6} className="px-6 py-12 text-center">
                         <Loader className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
