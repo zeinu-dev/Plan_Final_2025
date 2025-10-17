@@ -3297,9 +3297,15 @@ def budget_by_activity_summary(request):
         from django.db.models import Q, Sum, Count, Case, When, DecimalField, F
         from decimal import Decimal
 
-        # Aggregate sub-activities by organization and activity type
-        # Don't filter by plans - get ALL sub-activities
-        sub_activities = SubActivity.objects.select_related('organization').values(
+        # Get approved plans first
+        approved_org_ids = Plan.objects.filter(
+            status='APPROVED'
+        ).values_list('organization_id', flat=True).distinct()
+
+        # Aggregate sub-activities by organization and activity type for APPROVED plans only
+        sub_activities = SubActivity.objects.filter(
+            organization_id__in=approved_org_ids
+        ).select_related('organization').values(
             'organization_id',
             'organization__name',
             'organization__code',
@@ -3374,8 +3380,15 @@ def executive_performance_summary(request):
         from django.db.models import Q, Sum, Count, Case, When, DecimalField, F
         from decimal import Decimal
 
-        # Aggregate budget data by organization - get ALL organizations with sub-activities
-        budget_data = SubActivity.objects.select_related('organization').values(
+        # Get approved plans first
+        approved_org_ids = Plan.objects.filter(
+            status='APPROVED'
+        ).values_list('organization_id', flat=True).distinct()
+
+        # Aggregate budget data by organization for APPROVED plans only
+        budget_data = SubActivity.objects.filter(
+            organization_id__in=approved_org_ids
+        ).select_related('organization').values(
             'organization_id',
             'organization__name',
             'organization__code'
@@ -3431,22 +3444,20 @@ def executive_performance_summary(request):
             org_performance[org_id]['partners_budget'] = partners
             org_performance[org_id]['funding_gap'] = max(0, total_cost - total_funding)
 
-        # Get plan counts for each organization
+        # Get plan counts for each organization (APPROVED only since we're filtering by approved)
         plans_data = Plan.objects.filter(
-            status__in=['SUBMITTED', 'APPROVED'],
+            status='APPROVED',
             organization_id__in=org_performance.keys()
-        ).values('organization_id', 'status').annotate(
+        ).values('organization_id').annotate(
             count=Count('id')
         )
 
         for item in plans_data:
             org_id = item['organization_id']
             if org_id in org_performance:
-                org_performance[org_id]['total_plans'] += item['count']
-                if item['status'] == 'APPROVED':
-                    org_performance[org_id]['approved'] += item['count']
-                elif item['status'] == 'SUBMITTED':
-                    org_performance[org_id]['submitted'] += item['count']
+                org_performance[org_id]['total_plans'] = item['count']
+                org_performance[org_id]['approved'] = item['count']
+                # submitted remains 0 since we only show approved
 
         return Response({
             'data': list(org_performance.values())
