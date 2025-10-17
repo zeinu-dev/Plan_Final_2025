@@ -2726,9 +2726,24 @@ class PerformanceAchievementViewSet(viewsets.ModelViewSet):
             if not report_id:
                 return Response({'error': 'Report ID is required'}, status=status.HTTP_400_BAD_REQUEST)
 
+            # Get the report to validate period filtering
+            try:
+                report = Report.objects.get(id=report_id)
+            except Report.DoesNotExist:
+                return Response({'error': 'Report not found'}, status=status.HTTP_404_NOT_FOUND)
+
             created_or_updated = []
+            valid_measure_ids = [a.get('performance_measure') for a in achievements if a.get('performance_measure')]
 
             with transaction.atomic():
+                # Delete achievements that are no longer in the list (removed from period)
+                PerformanceAchievement.objects.filter(
+                    report_id=report_id
+                ).exclude(
+                    performance_measure_id__in=valid_measure_ids
+                ).delete()
+
+                # Create or update achievements for current period
                 for achievement_data in achievements:
                     performance_measure_id = achievement_data.get('performance_measure')
 
@@ -2777,9 +2792,24 @@ class ActivityAchievementViewSet(viewsets.ModelViewSet):
             if not report_id:
                 return Response({'error': 'Report ID is required'}, status=status.HTTP_400_BAD_REQUEST)
 
+            # Get the report to validate period filtering
+            try:
+                report = Report.objects.get(id=report_id)
+            except Report.DoesNotExist:
+                return Response({'error': 'Report not found'}, status=status.HTTP_404_NOT_FOUND)
+
             created_or_updated = []
+            valid_activity_ids = [a.get('main_activity') for a in achievements if a.get('main_activity')]
 
             with transaction.atomic():
+                # Delete achievements that are no longer in the list (removed from period)
+                ActivityAchievement.objects.filter(
+                    report_id=report_id
+                ).exclude(
+                    main_activity_id__in=valid_activity_ids
+                ).delete()
+
+                # Create or update achievements for current period
                 for achievement_data in achievements:
                     main_activity_id = achievement_data.get('main_activity')
 
@@ -2828,11 +2858,29 @@ class SubActivityBudgetUtilizationViewSet(viewsets.ModelViewSet):
             if not report_id:
                 return Response({'error': 'Report ID is required'}, status=status.HTTP_400_BAD_REQUEST)
 
+            # Get the report to validate period filtering
+            try:
+                report = Report.objects.get(id=report_id)
+            except Report.DoesNotExist:
+                return Response({'error': 'Report not found'}, status=status.HTTP_404_NOT_FOUND)
+
             created_or_updated = []
+            valid_subactivity_ids = [u.get('sub_activity') for u in budget_utilizations if u.get('sub_activity')]
 
             with transaction.atomic():
+                # Delete budget utilizations that are no longer in the list (removed from period)
+                SubActivityBudgetUtilization.objects.filter(
+                    report_id=report_id
+                ).exclude(
+                    sub_activity_id__in=valid_subactivity_ids
+                ).delete()
+
+                # Create or update budget utilizations for current period
                 for util_data in budget_utilizations:
                     sub_activity_id = util_data.get('sub_activity')
+
+                    if not sub_activity_id:
+                        continue
 
                     obj, created = SubActivityBudgetUtilization.objects.update_or_create(
                         report_id=report_id,
