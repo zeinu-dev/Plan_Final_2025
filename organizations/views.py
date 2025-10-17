@@ -1194,7 +1194,12 @@ class SubActivityViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = SubActivity.objects.all()
+        queryset = SubActivity.objects.select_related(
+            'main_activity',
+            'main_activity__initiative',
+            'main_activity__initiative__organization',
+            'main_activity__organization'
+        ).all()
         main_activity = self.request.query_params.get('main_activity', None)
         if main_activity is not None:
             queryset = queryset.filter(main_activity=main_activity)

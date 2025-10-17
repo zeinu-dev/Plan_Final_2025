@@ -229,6 +229,7 @@ class SubActivitySerializer(serializers.ModelSerializer):
     total_funding = serializers.SerializerMethodField()
     estimated_cost = serializers.SerializerMethodField()
     funding_gap = serializers.SerializerMethodField()
+    organization = serializers.SerializerMethodField()
 
     class Meta:
         model = SubActivity
@@ -238,7 +239,7 @@ class SubActivitySerializer(serializers.ModelSerializer):
             'government_treasury', 'sdg_funding', 'partners_funding', 'other_funding',
             'training_details', 'meeting_workshop_details', 'procurement_details',
             'printing_details', 'supervision_details', 'partners_details',
-            'total_funding', 'estimated_cost', 'funding_gap',
+            'total_funding', 'estimated_cost', 'funding_gap', 'organization',
             'created_at', 'updated_at'
         ]
 
@@ -250,6 +251,15 @@ class SubActivitySerializer(serializers.ModelSerializer):
 
     def get_funding_gap(self, obj):
         return obj.funding_gap
+
+    def get_organization(self, obj):
+        # Get organization from main_activity -> initiative -> organization
+        if obj.main_activity and obj.main_activity.initiative:
+            if hasattr(obj.main_activity, 'organization') and obj.main_activity.organization:
+                return obj.main_activity.organization.id
+            elif obj.main_activity.initiative.organization:
+                return obj.main_activity.initiative.organization.id
+        return None
 
     def validate(self, data):
         # Validate that estimated cost is positive
