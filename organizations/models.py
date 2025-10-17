@@ -199,6 +199,7 @@ class StrategicInitiative(models.Model):
             ),
         ]
         indexes = [
+            models.Index(fields=['strategic_objective'], name='init_obj_idx'),
             models.Index(fields=['program'], name='idx_initiative_program'),
             models.Index(fields=['organization'], name='idx_initiative_organization'),
         ]
@@ -573,12 +574,15 @@ class MainActivity(models.Model):
         if not self.organization and self.initiative and self.initiative.organization:
             self.organization = self.initiative.organization
     
+    class Meta:
+        indexes = [
+            models.Index(fields=['initiative'], name='mainact_init_idx'),
+        ]
+
     def save(self, *args, **kwargs):
         self.clean()
         super().save(*args, **kwargs)
-    
 
-    
     def __str__(self):
         return self.name
 
@@ -687,26 +691,31 @@ class SubActivity(models.Model):
         """Calculate funding gap"""
         return max(0, self.estimated_cost - self.total_funding)
     
+    class Meta:
+        verbose_name = "Sub Activity"
+        verbose_name_plural = "Sub Activities"
+        indexes = [
+            models.Index(fields=['main_activity'], name='subact_mainact_idx'),
+            models.Index(fields=['activity_type'], name='subact_type_idx'),
+            models.Index(fields=['budget_calculation_type'], name='subact_budgtype_idx'),
+        ]
+
     def clean(self):
         super().clean()
-        
+
         # Validate that estimated cost is positive
         if self.estimated_cost <= 0:
             raise ValidationError('Estimated cost must be greater than 0')
-        
+
         # Validate that total funding doesn't exceed estimated cost
         if self.total_funding > self.estimated_cost:
             raise ValidationError(
                 f'Total funding ({self.total_funding}) cannot exceed estimated cost ({self.estimated_cost})'
             )
-    
+
     def __str__(self):
         return f"{self.main_activity.name} - {self.name} ({self.activity_type})"
-    
-    class Meta:
-        verbose_name = "Sub Activity"
-        verbose_name_plural = "Sub Activities"
-        ordering = ['created_at']
+
 class ActivityBudget(models.Model):
     BUDGET_CALCULATION_TYPES = [
         ('WITH_TOOL', 'With Tool'),
@@ -1120,14 +1129,14 @@ class Plan(models.Model):
         ('Desk/Team Plan', 'Desk/Team Plan'),
         ('Individual Plan ', 'Individual Plan ')
     ]
-    
+
     PLAN_STATUS = [
         ('DRAFT', 'Draft'),
         ('SUBMITTED', 'Submitted'),
         ('APPROVED', 'Approved'),
         ('REJECTED', 'Rejected')
     ]
-    
+
     organization = models.ForeignKey(
         Organization,
         on_delete=models.CASCADE,
@@ -1165,14 +1174,21 @@ class Plan(models.Model):
     from_date = models.DateField()
     to_date = models.DateField()
     status = models.CharField(
-        max_length=20, 
+        max_length=20,
         choices=PLAN_STATUS,
         default='DRAFT'
     )
     submitted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['status'], name='plan_status_idx'),
+            models.Index(fields=['organization', 'status'], name='plan_org_status_idx'),
+            models.Index(fields=['strategic_objective'], name='plan_obj_idx'),
+        ]
+
     def __str__(self):
         return f"{self.organization.name} - {self.strategic_objective} - {self.fiscal_year}"
         
