@@ -149,14 +149,34 @@ const AdminDashboard: React.FC = () => {
     gcTime: 5 * 60 * 1000
   });
 
-  // Fetch sub-activities for budget calculations
+  // Fetch budget by activity (optimized)
+  const { data: budgetByActivityResponse, isLoading: isLoadingBudgetActivity } = useQuery({
+    queryKey: ['plans', 'budget-by-activity'],
+    queryFn: async () => {
+      return await plans.getBudgetByActivity();
+    },
+    enabled: isAuthInitialized && mainTab === 'plans' && planSubTab === 'budget-activity',
+    staleTime: 2 * 60 * 1000
+  });
+
+  // Fetch executive performance (optimized)
+  const { data: executivePerformanceResponse, isLoading: isLoadingExecutivePerf } = useQuery({
+    queryKey: ['plans', 'executive-performance'],
+    queryFn: async () => {
+      return await plans.getExecutivePerformance();
+    },
+    enabled: isAuthInitialized && mainTab === 'plans' && planSubTab === 'executive-performance',
+    staleTime: 2 * 60 * 1000
+  });
+
+  // Fallback: fetch sub-activities only if needed for other purposes
   const { data: subActivitiesData, isLoading: isLoadingSubActivities } = useQuery({
     queryKey: ['sub-activities-admin'],
     queryFn: async () => {
       const response = await api.get('/sub-activities/');
       return { data: response.data?.results || response.data || [] };
     },
-    enabled: isAuthInitialized && mainTab === 'plans' && (planSubTab === 'budget-activity' || planSubTab === 'executive-performance'),
+    enabled: false, // Disabled now that we have optimized endpoints
     staleTime: 2 * 60 * 1000,
     gcTime: 5 * 60 * 1000
   });
@@ -222,6 +242,22 @@ const AdminDashboard: React.FC = () => {
 
   // Budget by activity type data for table
   const budgetByActivityData = useMemo(() => {
+    if (budgetByActivityResponse?.data) {
+      // Use optimized backend data
+      return budgetByActivityResponse.data.map((org: any) => ({
+        organizationName: org.organization_name,
+        Training: org.Training,
+        Meeting: org['Meeting / Workshop'], // Map to Meeting for compatibility
+        Workshop: org['Meeting / Workshop'], // Map to Workshop for compatibility
+        Procurement: org.Procurement,
+        Printing: org.Printing,
+        Other: org.Other,
+        totalCount: org.total_count,
+        totalBudget: org.total_budget
+      }));
+    }
+
+    // Fallback to old computation if response not available
     const subActivities = subActivitiesData?.data || [];
     const orgActivityData: Record<string, any> = {};
 
@@ -258,10 +294,27 @@ const AdminDashboard: React.FC = () => {
     });
 
     return Object.values(orgActivityData);
-  }, [subActivitiesData?.data, organizationsMap]);
+  }, [budgetByActivityResponse, subActivitiesData?.data, organizationsMap]);
 
   // Executive performance data
   const executivePerformanceData = useMemo(() => {
+    if (executivePerformanceResponse?.data) {
+      // Use optimized backend data
+      return executivePerformanceResponse.data.map((org: any) => ({
+        organizationName: org.organization_name,
+        totalPlans: org.total_plans,
+        approved: org.approved,
+        submitted: org.submitted,
+        totalBudget: org.total_budget,
+        availableFunding: org.available_funding,
+        governmentBudget: org.government_budget,
+        sdgBudget: org.sdg_budget,
+        partnersBudget: org.partners_budget,
+        fundingGap: org.funding_gap
+      }));
+    }
+
+    // Fallback to old computation if response not available
     const submittedAndApprovedPlans = reviewedPlansData.filter(plan => ['SUBMITTED', 'APPROVED'].includes(plan.status));
     const executiveData: Record<string, any> = {};
     const subActivities = subActivitiesData?.data || [];
@@ -311,7 +364,7 @@ const AdminDashboard: React.FC = () => {
     });
 
     return Object.values(executiveData);
-  }, [reviewedPlansData, subActivitiesData?.data, organizationsMap]);
+  }, [executivePerformanceResponse, reviewedPlansData, subActivitiesData?.data, organizationsMap]);
 
   const getFilteredPendingPlans = useMemo(() => {
     let filtered = reviewedPlansData.filter(plan => plan.status === 'SUBMITTED');

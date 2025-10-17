@@ -13,7 +13,7 @@ from .views import (
     ProcurementItemViewSet,login_view, logout_view, check_auth,
     update_profile, password_change, ReportViewSet,
     PerformanceAchievementViewSet, ActivityAchievementViewSet, SubActivityBudgetUtilizationViewSet,
-    report_statistics)
+    report_statistics, reviewed_plans_summary, budget_by_activity_summary, executive_performance_summary)
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect
 from django.http import JsonResponse
 router = DefaultRouter()
@@ -52,6 +52,10 @@ def csrf_token_view(request):
 urlpatterns = [
     # Report statistics endpoint (must come before router to avoid conflicts)
     path('reports/statistics/', report_statistics, name='report-statistics'),
+    # Optimized plan summary endpoints
+    path('plans/reviewed-summary/', reviewed_plans_summary, name='reviewed-plans-summary'),
+    path('plans/budget-by-activity/', budget_by_activity_summary, name='budget-by-activity'),
+    path('plans/executive-performance/', executive_performance_summary, name='executive-performance'),
     # Add custom budget update endpoint
     path('main-activities/<str:pk>/budget/', MainActivityViewSet.as_view({'post': 'update_budget'}), name='sub-activities-update'),
     # Auth endpoints

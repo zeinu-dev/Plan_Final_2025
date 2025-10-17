@@ -1490,6 +1490,41 @@ export const plans = {
     }
   },
 
+  async getReviewedSummary(params?: { status?: string; organization?: string; search?: string }) {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params?.status) queryParams.append('status', params.status);
+      if (params?.organization) queryParams.append('organization', params.organization);
+      if (params?.search) queryParams.append('search', params.search);
+
+      const response = await api.get(`/plans/reviewed-summary/?${queryParams.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get reviewed plans summary:', error);
+      throw error;
+    }
+  },
+
+  async getBudgetByActivity() {
+    try {
+      const response = await api.get('/plans/budget-by-activity/');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get budget by activity:', error);
+      throw error;
+    }
+  },
+
+  async getExecutivePerformance() {
+    try {
+      const response = await api.get('/plans/executive-performance/');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get executive performance:', error);
+      throw error;
+    }
+  },
+
   async getById(id: string) {
     try {
       const response = await api.get(`/plans/${id}/`, {

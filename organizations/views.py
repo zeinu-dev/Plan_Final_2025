@@ -3234,3 +3234,219 @@ def report_statistics(request):
         logger.exception("Error getting report statistics")
         logger.error(f"Error details: {error_details}")
         return Response({'error': str(e), 'details': error_details}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def reviewed_plans_summary(request):
+    """
+    Optimized endpoint for reviewed plans tab.
+    Returns only necessary data for approved and rejected plans.
+    """
+    try:
+        from django.db.models import Q
+
+        # Get query parameters
+        status_filter = request.GET.get('status', 'all')
+        org_filter = request.GET.get('organization', 'all')
+        search = request.GET.get('search', '')
+
+        # Build query
+        query = Q(status__in=['APPROVED', 'REJECTED'])
+
+        if status_filter != 'all':
+            query &= Q(status=status_filter)
+
+        if org_filter != 'all':
+            query &= Q(organization_id=org_filter)
+
+        if search:
+            query &= (
+                Q(organization__name__icontains=search) |
+                Q(organization__code__icontains=search) |
+                Q(user__email__icontains=search)
+            )
+
+        # Fetch plans with related data
+        plans = Plan.objects.filter(query).select_related(
+            'organization', 'user'
+        ).values(
+            'id', 'organization_id', 'organization__name', 'organization__code',
+            'status', 'submitted_at', 'reviewed_at', 'user__email',
+            'review_comment', 'plan_type'
+        ).order_by('-reviewed_at')
+
+        return Response({
+            'plans': list(plans),
+            'count': len(plans)
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.exception("Error fetching reviewed plans")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def budget_by_activity_summary(request):
+    """
+    Optimized endpoint for budget by activity tab.
+    Pre-aggregates budget data by organization and activity type on the backend.
+    """
+    try:
+        from django.db.models import Q, Sum, Count, Case, When, DecimalField, F
+        from decimal import Decimal
+
+        # Get all approved and submitted plans
+        plans = Plan.objects.filter(
+            status__in=['SUBMITTED', 'APPROVED']
+        ).values_list('organization_id', 'organization__name', 'organization__code')
+
+        # Create organization lookup
+        org_map = {}
+        for org_id, org_name, org_code in plans:
+            if org_id not in org_map:
+                org_map[org_id] = {
+                    'organization_id': org_id,
+                    'organization_name': org_name or f'ORG-{org_id}',
+                    'organization_code': org_code or f'ORG-{org_id:04d}',
+                    'Meeting / Workshop': {'count': 0, 'budget': 0},
+                    'Training': {'count': 0, 'budget': 0},
+                    'Supervision': {'count': 0, 'budget': 0},
+                    'Procurement': {'count': 0, 'budget': 0},
+                    'Printing': {'count': 0, 'budget': 0},
+                    'Other': {'count': 0, 'budget': 0},
+                    'total_count': 0,
+                    'total_budget': 0
+                }
+
+        # Aggregate sub-activities by organization and activity type
+        sub_activities = SubActivity.objects.filter(
+            organization_id__in=org_map.keys()
+        ).values('organization_id', 'activity_type').annotate(
+            count=Count('id'),
+            with_tool_sum=Sum(
+                Case(
+                    When(budget_calculation_type='WITH_TOOL', then=F('estimated_cost_with_tool')),
+                    default=0,
+                    output_field=DecimalField()
+                )
+            ),
+            without_tool_sum=Sum(
+                Case(
+                    When(budget_calculation_type='WITHOUT_TOOL', then=F('estimated_cost_without_tool')),
+                    default=0,
+                    output_field=DecimalField()
+                )
+            )
+        )
+
+        # Populate data
+        for item in sub_activities:
+            org_id = item['organization_id']
+            activity_type = item['activity_type'] or 'Other'
+            count = item['count']
+            budget = float(item['with_tool_sum'] or 0) + float(item['without_tool_sum'] or 0)
+
+            if org_id in org_map and activity_type in org_map[org_id]:
+                org_map[org_id][activity_type]['count'] = count
+                org_map[org_id][activity_type]['budget'] = budget
+                org_map[org_id]['total_count'] += count
+                org_map[org_id]['total_budget'] += budget
+
+        return Response({
+            'data': list(org_map.values())
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.exception("Error fetching budget by activity")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def executive_performance_summary(request):
+    """
+    Optimized endpoint for executive performance tab.
+    Pre-aggregates performance and budget data by organization on the backend.
+    """
+    try:
+        from django.db.models import Q, Sum, Count, Case, When, DecimalField, F
+        from decimal import Decimal
+
+        # Get all approved and submitted plans with counts
+        plans_data = Plan.objects.filter(
+            status__in=['SUBMITTED', 'APPROVED']
+        ).values('organization_id', 'organization__name', 'organization__code', 'status').annotate(
+            count=Count('id')
+        )
+
+        # Create organization performance map
+        org_performance = {}
+        for item in plans_data:
+            org_id = item['organization_id']
+            if org_id not in org_performance:
+                org_performance[org_id] = {
+                    'organization_id': org_id,
+                    'organization_name': item['organization__name'] or f'ORG-{org_id}',
+                    'organization_code': item['organization__code'] or f'ORG-{org_id:04d}',
+                    'total_plans': 0,
+                    'approved': 0,
+                    'submitted': 0,
+                    'total_budget': 0,
+                    'available_funding': 0,
+                    'government_budget': 0,
+                    'sdg_budget': 0,
+                    'partners_budget': 0,
+                    'funding_gap': 0
+                }
+
+            org_performance[org_id]['total_plans'] += item['count']
+            if item['status'] == 'APPROVED':
+                org_performance[org_id]['approved'] += item['count']
+            elif item['status'] == 'SUBMITTED':
+                org_performance[org_id]['submitted'] += item['count']
+
+        # Aggregate budget data by organization
+        budget_data = SubActivity.objects.filter(
+            organization_id__in=org_performance.keys()
+        ).values('organization_id').annotate(
+            total_cost=Sum(
+                Case(
+                    When(budget_calculation_type='WITH_TOOL', then=F('estimated_cost_with_tool')),
+                    When(budget_calculation_type='WITHOUT_TOOL', then=F('estimated_cost_without_tool')),
+                    default=0,
+                    output_field=DecimalField()
+                )
+            ),
+            gov_funding=Sum('government_treasury'),
+            partners_funding=Sum('partners_funding'),
+            sdg_funding=Sum('sdg_funding'),
+            other_funding=Sum('other_funding')
+        )
+
+        # Populate budget data
+        for item in budget_data:
+            org_id = item['organization_id']
+            if org_id in org_performance:
+                total_cost = float(item['total_cost'] or 0)
+                gov = float(item['gov_funding'] or 0)
+                partners = float(item['partners_funding'] or 0)
+                sdg = float(item['sdg_funding'] or 0)
+                other = float(item['other_funding'] or 0)
+                total_funding = gov + partners + sdg + other
+
+                org_performance[org_id]['total_budget'] = total_cost
+                org_performance[org_id]['available_funding'] = total_funding
+                org_performance[org_id]['government_budget'] = gov
+                org_performance[org_id]['sdg_budget'] = sdg
+                org_performance[org_id]['partners_budget'] = partners
+                org_performance[org_id]['funding_gap'] = max(0, total_cost - total_funding)
+
+        return Response({
+            'data': list(org_performance.values())
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.exception("Error fetching executive performance")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
