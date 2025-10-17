@@ -2469,7 +2469,12 @@ class ReportViewSet(viewsets.ModelViewSet):
                         achievement_record = report.activity_achievements.filter(main_activity=activity).first()
 
                         sub_activities_data = []
-                        for sub_activity in activity.sub_activities.all():
+                        # Only include sub-activities that have budget utilization data for this report
+                        # This ensures we only show sub-activities planned for this specific report period
+                        sub_activity_ids_with_budget = report.budget_utilizations.values_list('sub_activity_id', flat=True)
+                        filtered_sub_activities = activity.sub_activities.filter(id__in=sub_activity_ids_with_budget)
+
+                        for sub_activity in filtered_sub_activities:
                             budget_util = report.budget_utilizations.filter(sub_activity=sub_activity).first()
 
                             total_budget = (
