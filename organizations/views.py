@@ -1805,8 +1805,11 @@ class PlanViewSet(viewsets.ModelViewSet):
         """
         Get comprehensive analytics data for admin dashboard
         Filters data based on admin's organization hierarchy
+        Uses caching for 2 minutes to improve performance
         """
         try:
+            from django.core.cache import cache
+
             user_organizations = OrganizationUser.objects.filter(user=request.user)
             user_roles = user_organizations.values_list('role', flat=True)
 
@@ -1818,6 +1821,15 @@ class PlanViewSet(viewsets.ModelViewSet):
 
             # Get admin's organization filtering
             admin_org_id, admin_org_type, allowed_org_ids = self._get_admin_filtered_orgs(request)
+
+            # Create cache key based on admin org filtering
+            cache_key = f'admin_analytics_{admin_org_type}_{admin_org_id}'
+
+            # Try to get cached data
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                logger.info(f"Returning cached analytics for {cache_key}")
+                return Response(cached_data)
 
             # Base query for plans
             plans_query = Plan.objects.select_related('organization', 'strategic_objective')
@@ -1859,18 +1871,34 @@ class PlanViewSet(viewsets.ModelViewSet):
                 total_other=Sum('other_funding')
             )
 
-            # Calculate activity type budgets
-            activity_budgets = {}
-            for activity_type in ['Training', 'Meeting', 'Workshop', 'Supervision', 'Procurement', 'Printing', 'Other']:
-                type_activities = filtered_sub_activities.filter(activity_type=activity_type)
-                activity_budgets[activity_type] = {
-                    'count': type_activities.count(),
-                    'budget': sum(
-                        float(sa.estimated_cost_with_tool if sa.budget_calculation_type == 'WITH_TOOL'
-                              else sa.estimated_cost_without_tool)
-                        for sa in type_activities
+            # Calculate activity type budgets with optimized SQL aggregation
+            from django.db.models import Q, Count, Case, When, DecimalField, F
+
+            activity_budgets_raw = filtered_sub_activities.values('activity_type').annotate(
+                count=Count('id'),
+                budget=Sum(
+                    Case(
+                        When(budget_calculation_type='WITH_TOOL', then=F('estimated_cost_with_tool')),
+                        When(budget_calculation_type='WITHOUT_TOOL', then=F('estimated_cost_without_tool')),
+                        default=0,
+                        output_field=DecimalField()
                     )
+                )
+            )
+
+            # Convert to dictionary format
+            activity_budgets = {}
+            for item in activity_budgets_raw:
+                activity_type = item['activity_type'] or 'Other'
+                activity_budgets[activity_type] = {
+                    'count': item['count'],
+                    'budget': float(item['budget'] or 0)
                 }
+
+            # Ensure all activity types are present
+            for activity_type in ['Training', 'Meeting', 'Workshop', 'Supervision', 'Procurement', 'Printing', 'Other']:
+                if activity_type not in activity_budgets:
+                    activity_budgets[activity_type] = {'count': 0, 'budget': 0}
 
             # Count plans by status
             total_plans = submitted_approved_plans.count()
@@ -1895,6 +1923,10 @@ class PlanViewSet(viewsets.ModelViewSet):
                 'admin_org_type': admin_org_type,
                 'filtered': admin_org_type != 'MINISTER'
             }
+
+            # Cache the response for 2 minutes (120 seconds)
+            cache.set(cache_key, response_data, 120)
+            logger.info(f"Cached analytics data for {cache_key}")
 
             return Response(response_data)
 
@@ -3292,10 +3324,19 @@ def budget_by_activity_summary(request):
     """
     Optimized endpoint for budget by activity tab.
     Pre-aggregates budget data by organization and activity type on the backend.
+    Uses caching for 2 minutes to improve performance.
     """
     try:
         from django.db.models import Q, Sum, Count, Case, When, DecimalField, F
         from decimal import Decimal
+        from django.core.cache import cache
+
+        # Check cache first
+        cache_key = 'budget_by_activity_summary'
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            logger.info("Returning cached budget by activity data")
+            return JsonResponse(cached_data, safe=False)
 
         # Get sub-activities grouped by organization and activity type for approved plans
         sub_activities = SubActivity.objects.filter(
@@ -3360,9 +3401,15 @@ def budget_by_activity_summary(request):
                 org_map[org_id]['total_count'] += count
                 org_map[org_id]['total_budget'] += budget
 
-        return Response({
+        response_data = {
             'data': list(org_map.values())
-        }, status=status.HTTP_200_OK)
+        }
+
+        # Cache for 2 minutes (120 seconds)
+        cache.set(cache_key, response_data, 120)
+        logger.info("Cached budget by activity data")
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
     except Exception as e:
         logger.exception("Error fetching budget by activity")
@@ -3375,10 +3422,19 @@ def executive_performance_summary(request):
     """
     Optimized endpoint for executive performance tab.
     Pre-aggregates performance and budget data by organization on the backend.
+    Uses caching for 2 minutes to improve performance.
     """
     try:
         from django.db.models import Q, Sum, Count, Case, When, DecimalField, F
         from decimal import Decimal
+        from django.core.cache import cache
+
+        # Check cache first
+        cache_key = 'executive_performance_summary'
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            logger.info("Returning cached executive performance data")
+            return JsonResponse(cached_data, safe=False)
 
         # Get budget data grouped by organization for approved plans
         budget_data = SubActivity.objects.filter(
@@ -3457,9 +3513,15 @@ def executive_performance_summary(request):
                 org_performance[org_id]['approved'] = item['count']
                 # submitted remains 0 since we only show approved
 
-        return Response({
+        response_data = {
             'data': list(org_performance.values())
-        }, status=status.HTTP_200_OK)
+        }
+
+        # Cache for 2 minutes (120 seconds)
+        cache.set(cache_key, response_data, 120)
+        logger.info("Cached executive performance data")
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
     except Exception as e:
         logger.exception("Error fetching executive performance")

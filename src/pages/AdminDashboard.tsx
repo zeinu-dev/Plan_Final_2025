@@ -145,18 +145,19 @@ const AdminDashboard: React.FC = () => {
     fetchOrganizations();
   }, [isAuthInitialized]);
 
-  // Fetch analytics data from backend
+  // Fetch analytics data from backend with caching
   const { data: analyticsData, isLoading: isLoadingAnalytics, refetch: refetchAnalytics } = useQuery({
     queryKey: ['admin-analytics'],
     queryFn: async () => {
       return await plans.getAdminAnalytics();
     },
     enabled: isAuthInitialized && mainTab === 'plans' && planSubTab === 'analytics',
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000
+    staleTime: 30 * 1000,
+    gcTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false
   });
 
-  // Fetch all plans with backend filtering
+  // Fetch all plans with backend filtering and caching
   const { data: allPlansData, isLoading: isLoadingPlans, refetch: refetchPlans } = useQuery({
     queryKey: ['plans', 'admin-all'],
     queryFn: async () => {
@@ -168,28 +169,33 @@ const AdminDashboard: React.FC = () => {
       return { data: plansData };
     },
     enabled: isAuthInitialized && mainTab === 'plans' && (planSubTab === 'pending' || planSubTab === 'reviewed' || planSubTab === 'budget-activity' || planSubTab === 'executive-performance'),
-    staleTime: 2 * 60 * 1000,
-    gcTime: 5 * 60 * 1000
+    staleTime: 30 * 1000,
+    gcTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false
   });
 
-  // Fetch budget by activity (optimized)
+  // Fetch budget by activity (optimized with caching)
   const { data: budgetByActivityResponse, isLoading: isLoadingBudgetActivity } = useQuery({
     queryKey: ['plans', 'budget-by-activity'],
     queryFn: async () => {
       return await plans.getBudgetByActivity();
     },
     enabled: isAuthInitialized && mainTab === 'plans' && planSubTab === 'budget-activity',
-    staleTime: 2 * 60 * 1000
+    staleTime: 30 * 1000,
+    gcTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false
   });
 
-  // Fetch executive performance (optimized)
+  // Fetch executive performance (optimized with caching)
   const { data: executivePerformanceResponse, isLoading: isLoadingExecutivePerf } = useQuery({
     queryKey: ['plans', 'executive-performance'],
     queryFn: async () => {
       return await plans.getExecutivePerformance();
     },
     enabled: isAuthInitialized && mainTab === 'plans' && planSubTab === 'executive-performance',
-    staleTime: 2 * 60 * 1000
+    staleTime: 30 * 1000,
+    gcTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false
   });
 
   // Fallback: fetch sub-activities only if needed for other purposes
