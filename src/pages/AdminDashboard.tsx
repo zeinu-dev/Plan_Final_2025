@@ -1240,10 +1240,47 @@ const AdminDashboard: React.FC = () => {
       )}
 
       {mainTab === 'reports' && (
-        <ReportsTabContent
-          reportSubTab={reportSubTab}
-          setReportSubTab={setReportSubTab}
-        />
+        <div>
+          {/* Report Sub-Tab Navigation */}
+          <div className="mb-6 border-b border-gray-200">
+            <div className="flex -mb-px space-x-4 overflow-x-auto">
+              <button
+                onClick={() => setReportSubTab('performance-overview')}
+                className={`py-4 px-4 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  reportSubTab === 'performance-overview'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Organization Performance Overview
+              </button>
+              <button
+                onClick={() => setReportSubTab('approved-reports')}
+                className={`py-4 px-4 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  reportSubTab === 'approved-reports'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Approved ME Reports
+              </button>
+              <button
+                onClick={() => setReportSubTab('budget-utilization')}
+                className={`py-4 px-4 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  reportSubTab === 'budget-utilization'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Budget Utilization by Source
+              </button>
+            </div>
+          </div>
+
+          <ReportsTabContent
+            reportSubTab={reportSubTab}
+          />
+        </div>
       )}
     </div>
   );

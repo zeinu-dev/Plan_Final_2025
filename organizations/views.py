@@ -2761,26 +2761,68 @@ def report_statistics(request):
     - Strategic objective achievement percentages with color coding (grouped by organization)
     - Organization M&E reports (approved only)
     - Budget utilization by source
+
+    Applies organization hierarchy filtering based on admin's organization:
+    - Minister: sees all organizations
+    - State Ministers: see only their organizational hierarchy children
+    - Other admins: see only their organization
     """
     try:
         from django.db.models import Q, Count, Avg, Sum, F, Case, When, DecimalField
         from decimal import Decimal
 
-        # Get all organizations with approved plans
-        approved_plans = Plan.objects.filter(status='APPROVED')
+        # Helper function to get child organizations recursively
+        def get_child_organizations(parent_org_id, all_orgs):
+            child_ids = [parent_org_id]
+
+            def get_descendants(org_id):
+                for org in all_orgs:
+                    if org.parent_id == org_id:
+                        child_ids.append(org.id)
+                        get_descendants(org.id)
+
+            get_descendants(parent_org_id)
+            return child_ids
+
+        # Determine admin's allowed organizations
+        user_orgs = request.user.userorganization_set.all()
+        if not user_orgs.exists():
+            return Response({'error': 'User has no organization assigned'}, status=status.HTTP_403_FORBIDDEN)
+
+        admin_org = user_orgs.first().organization
+        admin_org_id = admin_org.id
+        admin_org_type = admin_org.type
+
+        # Determine which organizations this admin can access
+        if admin_org_type == 'MINISTER':
+            # Minister sees all organizations
+            allowed_org_ids = None  # None means no filtering
+        else:
+            # For other organization types, get all descendants
+            all_orgs = list(Organization.objects.all())
+            allowed_org_ids = get_child_organizations(admin_org_id, all_orgs)
+
+        # Get all organizations with approved plans (apply filtering)
+        approved_plans_query = Plan.objects.filter(status='APPROVED')
+        if allowed_org_ids is not None:
+            approved_plans_query = approved_plans_query.filter(organization__in=allowed_org_ids)
+
+        approved_plans = approved_plans_query
         orgs_with_approved_plans = approved_plans.values_list('organization_id', flat=True).distinct()
 
-        # Get organizations that have submitted reports
-        orgs_with_reports = Report.objects.filter(
-            status__in=['SUBMITTED', 'APPROVED']
-        ).values_list('organization_id', flat=True).distinct()
+        # Get organizations that have submitted reports (apply filtering)
+        orgs_with_reports_query = Report.objects.filter(status__in=['SUBMITTED', 'APPROVED'])
+        if allowed_org_ids is not None:
+            orgs_with_reports_query = orgs_with_reports_query.filter(organization__in=allowed_org_ids)
+
+        orgs_with_reports = orgs_with_reports_query.values_list('organization_id', flat=True).distinct()
 
         # Calculate submission stats
         total_orgs = Organization.objects.filter(id__in=orgs_with_approved_plans).count()
         submitted_count = len(set(orgs_with_reports))
         not_submitted_count = total_orgs - submitted_count
 
-        # Get strategic objective achievements grouped by organization
+        # Get strategic objective achievements grouped by organization (apply filtering)
         objective_achievements_by_org = []
         organizations = Organization.objects.filter(id__in=orgs_with_approved_plans)
 
@@ -2858,11 +2900,13 @@ def report_statistics(request):
                     'objectives': org_objectives
                 })
 
-        # Get organization M&E reports (approved only)
+        # Get organization M&E reports (approved only, apply filtering)
         organization_reports = []
-        approved_reports = Report.objects.filter(
-            status='APPROVED'
-        ).select_related('organization', 'plan').prefetch_related(
+        approved_reports_query = Report.objects.filter(status='APPROVED')
+        if allowed_org_ids is not None:
+            approved_reports_query = approved_reports_query.filter(organization__in=allowed_org_ids)
+
+        approved_reports = approved_reports_query.select_related('organization', 'plan').prefetch_related(
             'performance_achievements__performance_measure',
             'activity_achievements__main_activity',
             'budget_utilizations__sub_activity'
