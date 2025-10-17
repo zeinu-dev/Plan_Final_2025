@@ -2784,23 +2784,29 @@ def report_statistics(request):
             get_descendants(parent_org_id)
             return child_ids
 
-        # Determine admin's allowed organizations
+        # Determine user's allowed organizations based on role
         user_orgs = request.user.userorganization_set.all()
-        if not user_orgs.exists():
-            return Response({'error': 'User has no organization assigned'}, status=status.HTTP_403_FORBIDDEN)
+        allowed_org_ids = None  # Default: no filtering (show all)
 
-        admin_org = user_orgs.first().organization
-        admin_org_id = admin_org.id
-        admin_org_type = admin_org.type
+        if user_orgs.exists():
+            # Get user's roles
+            user_roles = [uo.role for uo in user_orgs]
 
-        # Determine which organizations this admin can access
-        if admin_org_type == 'MINISTER':
-            # Minister sees all organizations
-            allowed_org_ids = None  # None means no filtering
-        else:
-            # For other organization types, get all descendants
-            all_orgs = list(Organization.objects.all())
-            allowed_org_ids = get_child_organizations(admin_org_id, all_orgs)
+            # Only apply filtering for admin users
+            if 'ADMIN' in user_roles:
+                admin_org = user_orgs.first().organization
+                admin_org_id = admin_org.id
+                admin_org_type = admin_org.type
+
+                # Determine which organizations this admin can access
+                if admin_org_type == 'MINISTER':
+                    # Minister sees all organizations
+                    allowed_org_ids = None  # None means no filtering
+                else:
+                    # For other organization types, get all descendants
+                    all_orgs = list(Organization.objects.all())
+                    allowed_org_ids = get_child_organizations(admin_org_id, all_orgs)
+            # Evaluators and Planners see all organizations by default
 
         # Get all organizations with approved plans (apply filtering)
         approved_plans_query = Plan.objects.filter(status='APPROVED')
