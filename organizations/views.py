@@ -3022,9 +3022,12 @@ def report_statistics(request):
 
                 for achievement in achievements:
                     measure = achievement.performance_measure
-                    target = measure.annual_target or 0
+                    report = achievement.report
 
-                    if target > 0:
+                    # Get the target for the specific report period, not annual
+                    target = ReportViewSet()._get_target_for_period(measure, report.report_type)
+
+                    if target and target > 0:
                         achievement_percent = (Decimal(str(achievement.achievement)) / Decimal(str(target))) * 100
                         total_percentage += achievement_percent
                         measure_count += 1
@@ -3078,8 +3081,11 @@ def report_statistics(request):
 
             for achievement in achievements:
                 measure = achievement.performance_measure
-                target = measure.annual_target or 0
-                if target > 0:
+
+                # Get the target for the specific report period, not annual
+                target = ReportViewSet()._get_target_for_period(measure, report.report_type)
+
+                if target and target > 0:
                     achievement_percent = (Decimal(str(achievement.achievement)) / Decimal(str(target))) * 100
                     total_percentage += achievement_percent
                     measure_count += 1
@@ -3104,14 +3110,34 @@ def report_statistics(request):
                     # Get all sub-activities for the plan through the selected objectives
                     # Include activities from both default initiatives (organization=NULL)
                     # and custom initiatives from this organization
+                    # ONLY include activities that have valid targets for this report period
                     selected_obj_ids = list(report.plan.selected_objectives.values_list('id', flat=True))
 
                     if selected_obj_ids:
-                        sub_activities = SubActivity.objects.filter(
-                            main_activity__initiative__strategic_objective_id__in=selected_obj_ids
+                        initiatives = StrategicInitiative.objects.filter(
+                            strategic_objective_id__in=selected_obj_ids
                         ).filter(
-                            Q(main_activity__initiative__organization=report.organization) |
-                            Q(main_activity__initiative__organization__isnull=True)
+                            Q(organization=report.organization) |
+                            Q(organization__isnull=True)
+                        )
+
+                        activities = MainActivity.objects.filter(
+                            initiative__in=initiatives
+                        ).filter(
+                            Q(organization=report.organization) |
+                            Q(organization__isnull=True)
+                        )
+
+                        # Filter activities by those that have valid targets for this report period
+                        valid_activity_ids = []
+                        for activity in activities:
+                            target = ReportViewSet()._get_target_for_period(activity, report.report_type)
+                            if target and target > 0:
+                                valid_activity_ids.append(activity.id)
+
+                        # Get sub-activities only for activities with valid targets
+                        sub_activities = SubActivity.objects.filter(
+                            main_activity_id__in=valid_activity_ids
                         )
 
                         for sub_activity in sub_activities:
