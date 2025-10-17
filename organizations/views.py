@@ -2777,7 +2777,9 @@ def report_statistics(request):
 
             def get_descendants(org_id):
                 for org in all_orgs:
-                    if org.parent_id == org_id:
+                    # Access parent_id directly (Django creates this field automatically)
+                    parent_id = getattr(org, 'parent_id', None)
+                    if parent_id == org_id:
                         child_ids.append(org.id)
                         get_descendants(org.id)
 
@@ -3014,10 +3016,10 @@ def report_statistics(request):
                 report__in=org_reports
             )
 
-            total_govt = sum(float(bu.government_treasury_utilized) for bu in budget_utils)
-            total_sdg = sum(float(bu.sdg_funding_utilized) for bu in budget_utils)
-            total_partners = sum(float(bu.partners_funding_utilized) for bu in budget_utils)
-            total_other = sum(float(bu.other_funding_utilized) for bu in budget_utils)
+            total_govt = sum(float(bu.government_treasury_utilized or 0) for bu in budget_utils)
+            total_sdg = sum(float(bu.sdg_funding_utilized or 0) for bu in budget_utils)
+            total_partners = sum(float(bu.partners_funding_utilized or 0) for bu in budget_utils)
+            total_other = sum(float(bu.other_funding_utilized or 0) for bu in budget_utils)
 
             if total_govt + total_sdg + total_partners + total_other > 0:
                 budget_utilization_by_org.append({
@@ -3042,5 +3044,12 @@ def report_statistics(request):
         }, status=status.HTTP_200_OK)
 
     except Exception as e:
+        import traceback
+        error_details = {
+            'error': str(e),
+            'type': type(e).__name__,
+            'traceback': traceback.format_exc()
+        }
         logger.exception("Error getting report statistics")
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"Error details: {error_details}")
+        return Response({'error': str(e), 'details': error_details}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
