@@ -146,14 +146,14 @@ const AdminDashboard: React.FC = () => {
   }, [isAuthInitialized]);
 
   // Fetch analytics data from backend with caching
-  const { data: analyticsData, isLoading: isLoadingAnalytics, refetch: refetchAnalytics } = useQuery({
+  const { data: analyticsData, isLoading: isLoadingAnalytics, refetch: refetchAnalytics, isFetching: isFetchingAnalytics } = useQuery({
     queryKey: ['admin-analytics'],
     queryFn: async () => {
       return await plans.getAdminAnalytics();
     },
     enabled: isAuthInitialized && mainTab === 'plans' && planSubTab === 'analytics',
-    staleTime: 30 * 1000,
-    gcTime: 2 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false
   });
 
@@ -221,13 +221,14 @@ const AdminDashboard: React.FC = () => {
     return allPlansData?.data || [];
   }, [allPlansData?.data]);
 
-  const totalPlans = analyticsData?.total_plans || reviewedPlansData.filter(p => ['SUBMITTED', 'APPROVED'].includes(p.status)).length;
-  const pendingCount = analyticsData?.pending_count || reviewedPlansData.filter(p => p.status === 'SUBMITTED').length;
-  const approvedCount = analyticsData?.approved_count || reviewedPlansData.filter(p => p.status === 'APPROVED').length;
-  const rejectedCount = analyticsData?.rejected_count || reviewedPlansData.filter(p => p.status === 'REJECTED').length;
+  // Use only server-side analytics data - no frontend filtering
+  const totalPlans = analyticsData?.total_plans || 0;
+  const pendingCount = analyticsData?.pending_count || 0;
+  const approvedCount = analyticsData?.approved_count || 0;
+  const rejectedCount = analyticsData?.rejected_count || 0;
 
   const budgetTotals = useMemo(() => {
-    if (planSubTab === 'analytics' && analyticsData) {
+    if (analyticsData) {
       const budgets = analyticsData.budget_totals;
       const totalBudget = budgets.total_with_tool + budgets.total_without_tool;
       const totalFunding = budgets.government_total + budgets.partners_total + budgets.sdg_total + budgets.other_total;
@@ -252,10 +253,10 @@ const AdminDashboard: React.FC = () => {
       sdgTotal: 0,
       otherTotal: 0
     };
-  }, [planSubTab, analyticsData]);
+  }, [analyticsData]);
 
   const calculateActivityTypeBudgets = useMemo(() => {
-    if (planSubTab === 'analytics' && analyticsData) {
+    if (analyticsData) {
       return analyticsData.activity_budgets;
     }
     return {
@@ -267,7 +268,7 @@ const AdminDashboard: React.FC = () => {
       Printing: { count: 0, budget: 0 },
       Other: { count: 0, budget: 0 }
     };
-  }, [planSubTab, analyticsData]);
+  }, [analyticsData]);
 
   // Budget by activity type data for table
   const budgetByActivityData = useMemo(() => {
@@ -577,7 +578,14 @@ const AdminDashboard: React.FC = () => {
     Other: Activity
   };
 
-  if (!isAuthInitialized || (isLoadingPlans && planSubTab !== 'analytics') || (isLoadingAnalytics && planSubTab === 'analytics')) {
+  // Show loading only when necessary data is being fetched
+  const isLoading = !isAuthInitialized ||
+    (mainTab === 'plans' && planSubTab === 'analytics' && isLoadingAnalytics) ||
+    (mainTab === 'plans' && planSubTab === 'budget-activity' && isLoadingBudgetActivity) ||
+    (mainTab === 'plans' && planSubTab === 'executive-performance' && isLoadingExecutivePerf) ||
+    (mainTab === 'plans' && (planSubTab === 'pending' || planSubTab === 'reviewed') && isLoadingPlans);
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <Loader className="h-6 w-6 animate-spin mr-2 text-blue-600" />
@@ -738,6 +746,14 @@ const AdminDashboard: React.FC = () => {
           {/* Analytics Tab */}
           {planSubTab === 'analytics' && (
             <div className="space-y-8">
+              {/* Loading indicator for background refresh */}
+              {isFetchingAnalytics && !isLoadingAnalytics && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center">
+                  <RefreshCw className="h-4 w-4 animate-spin text-blue-600 mr-2" />
+                  <span className="text-sm text-blue-700">Refreshing data...</span>
+                </div>
+              )}
+
               {/* Top Statistics Cards - Plan Status */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
