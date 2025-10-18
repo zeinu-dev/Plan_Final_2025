@@ -97,6 +97,9 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     const initializeAdminAccess = async () => {
       try {
+        // Set initialized immediately to unblock UI
+        setIsAuthInitialized(true);
+
         const authData = await auth.getCurrentUser();
         if (!authData.isAuthenticated) {
           navigate('/login');
@@ -112,8 +115,6 @@ const AdminDashboard: React.FC = () => {
           const adminOrg = authData.userOrganizations[0];
           setAdminOrgType(adminOrg.organization_name || 'ADMIN');
         }
-
-        setIsAuthInitialized(true);
       } catch (error) {
         setError('Failed to verify admin permissions');
       }
@@ -578,23 +579,10 @@ const AdminDashboard: React.FC = () => {
     Other: Activity
   };
 
-  // Show loading only when necessary data is being fetched
-  const isLoading = !isAuthInitialized ||
-    (mainTab === 'plans' && planSubTab === 'analytics' && isLoadingAnalytics) ||
-    (mainTab === 'plans' && planSubTab === 'budget-activity' && isLoadingBudgetActivity) ||
-    (mainTab === 'plans' && planSubTab === 'executive-performance' && isLoadingExecutivePerf) ||
-    (mainTab === 'plans' && (planSubTab === 'pending' || planSubTab === 'reviewed') && isLoadingPlans);
+  // Show UI immediately, don't block on auth initialization
+  const showAuthError = !isAuthInitialized && error;
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader className="h-6 w-6 animate-spin mr-2 text-blue-600" />
-        <span className="text-lg">Loading admin dashboard...</span>
-      </div>
-    );
-  }
-
-  if (error) {
+  if (showAuthError) {
     return (
       <div className="p-8 bg-red-50 border border-red-200 rounded-lg text-center">
         <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
@@ -746,16 +734,26 @@ const AdminDashboard: React.FC = () => {
           {/* Analytics Tab */}
           {planSubTab === 'analytics' && (
             <div className="space-y-8">
-              {/* Loading indicator for background refresh */}
-              {isFetchingAnalytics && !isLoadingAnalytics && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center">
-                  <RefreshCw className="h-4 w-4 animate-spin text-blue-600 mr-2" />
-                  <span className="text-sm text-blue-700">Refreshing data...</span>
+              {/* Show loading state only for initial load */}
+              {isLoadingAnalytics ? (
+                <div className="space-y-6">
+                  <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+                    <Loader className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+                    <p className="text-gray-600">Loading analytics data...</p>
+                  </div>
                 </div>
-              )}
+              ) : (
+                <>
+                  {/* Loading indicator for background refresh */}
+                  {isFetchingAnalytics && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center">
+                      <RefreshCw className="h-4 w-4 animate-spin text-blue-600 mr-2" />
+                      <span className="text-sm text-blue-700">Refreshing data...</span>
+                    </div>
+                  )}
 
-              {/* Top Statistics Cards - Plan Status */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  {/* Top Statistics Cards - Plan Status */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
                   <div className="flex items-center justify-between">
                     <div>
@@ -898,12 +896,21 @@ const AdminDashboard: React.FC = () => {
                   })}
                 </div>
               </div>
+                </>
+              )}
             </div>
           )}
 
           {/* Pending Reviews Tab */}
           {planSubTab === 'pending' && (
             <div className="bg-white rounded-lg shadow">
+              {isLoadingPlans ? (
+                <div className="p-8 text-center">
+                  <Loader className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+                  <p className="text-gray-600">Loading pending plans...</p>
+                </div>
+              ) : (
+                <>
               <div className="p-6 border-b border-gray-200">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
                   <h3 className="text-lg font-semibold">Pending Reviews</h3>
@@ -1006,12 +1013,21 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
               )}
+                </>
+              )}
             </div>
           )}
 
           {/* Reviewed Plans Tab */}
           {planSubTab === 'reviewed' && (
             <div className="bg-white rounded-lg shadow">
+              {isLoadingPlans ? (
+                <div className="p-8 text-center">
+                  <Loader className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+                  <p className="text-gray-600">Loading reviewed plans...</p>
+                </div>
+              ) : (
+                <>
               <div className="p-6 border-b border-gray-200">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
                   <h3 className="text-lg font-semibold">Reviewed Plans</h3>
@@ -1137,12 +1153,21 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
               )}
+                </>
+              )}
             </div>
           )}
 
           {/* Budget by Activity Tab */}
           {planSubTab === 'budget-activity' && (
             <div className="bg-white rounded-lg shadow overflow-x-auto">
+              {isLoadingBudgetActivity ? (
+                <div className="p-8 text-center">
+                  <Loader className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+                  <p className="text-gray-600">Loading budget by activity...</p>
+                </div>
+              ) : (
+                <>
               <div className="p-6 border-b border-gray-200">
                 <h3 className="text-lg font-semibold">Budget by Activity Type</h3>
               </div>
@@ -1231,12 +1256,21 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
               )}
+                </>
+              )}
             </div>
           )}
 
           {/* Executive Performance Tab */}
           {planSubTab === 'executive-performance' && (
             <div className="bg-white rounded-lg shadow overflow-x-auto">
+              {isLoadingExecutivePerf ? (
+                <div className="p-8 text-center">
+                  <Loader className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+                  <p className="text-gray-600">Loading executive performance...</p>
+                </div>
+              ) : (
+                <>
               <div className="p-6 border-b border-gray-200">
                 <h3 className="text-lg font-semibold">Executive Performance Overview</h3>
               </div>
@@ -1333,6 +1367,8 @@ const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
                 </div>
+              )}
+                </>
               )}
             </div>
           )}
