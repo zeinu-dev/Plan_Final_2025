@@ -126,15 +126,20 @@ const Reporting: React.FC = () => {
   }, [reportId, step, isLoadingPlan, planData]);
 
   const { data: existingAchievements } = useQuery({
-    queryKey: ['report-achievements', reportId],
+    queryKey: ['report-achievements', reportId, selectedReportType],
     queryFn: async () => {
       if (!reportId) return null;
+
+      console.log(`Fetching achievements for report ${reportId} (${selectedReportType})`);
 
       const [perfResponse, actResponse, budgetResponse] = await Promise.all([
         api.get('/performance-achievements/', { params: { report: reportId } }),
         api.get('/activity-achievements/', { params: { report: reportId } }),
         api.get('/budget-utilizations/', { params: { report: reportId } })
       ]);
+
+      console.log('Performance achievements fetched:', perfResponse.data?.results || perfResponse.data || []);
+      console.log('Activity achievements fetched:', actResponse.data?.results || actResponse.data || []);
 
       const perfAchievements: Record<number, PerformanceAchievement> = {};
       const actAchievements: Record<number, ActivityAchievement> = {};
