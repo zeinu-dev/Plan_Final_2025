@@ -679,6 +679,9 @@ const Planning: React.FC = () => {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
+        // Set authChecked immediately to unblock UI
+        setAuthChecked(true);
+
         const authData = await auth.getCurrentUser();
         if (!authData.isAuthenticated) {
           navigate('/login');
@@ -713,12 +716,9 @@ const Planning: React.FC = () => {
 
         setFromDate(fiscalYearStart.toISOString().split('T')[0]);
         setToDate(fiscalYearEnd.toISOString().split('T')[0]);
-
-        setAuthChecked(true);
       } catch (error) {
         console.error('Failed to fetch user data:', error);
         setError('Failed to load user information');
-        setAuthChecked(true);
       }
     };
 
@@ -1050,18 +1050,8 @@ const Planning: React.FC = () => {
     }
   };
 
-  // Early return for auth check
-  if (!authChecked) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader className="h-6 w-6 animate-spin mr-2" />
-        <span>Loading...</span>
-      </div>
-    );
-  }
-
-  // Check permissions
-  if (!isUserPlanner && !isAdmin) {
+  // Check permissions (without blocking UI)
+  if (authChecked && !isUserPlanner && !isAdmin) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center p-8 bg-yellow-50 rounded-lg border border-yellow-200">
@@ -1562,6 +1552,14 @@ const Planning: React.FC = () => {
   // Main render
   return (
     <div className="px-4 py-6 sm:px-0">
+      {/* Loading state for initial user data */}
+      {!userOrgId && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center">
+          <Loader className="h-5 w-5 animate-spin mr-2 text-blue-600" />
+          <span className="text-blue-700">Loading planning workspace...</span>
+        </div>
+      )}
+
       {/* Error and Success Messages */}
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center text-red-700">
