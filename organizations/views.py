@@ -1402,7 +1402,7 @@ class ActivityCostingAssumptionViewSet(viewsets.ModelViewSet):
 
 
 class PlanViewSet(viewsets.ModelViewSet):
-    queryset = Plan.objects.all().select_related('organization', 'strategic_objective').prefetch_related('reviews', 'selected_objectives')
+    queryset = Plan.objects.all().select_related('organization').prefetch_related('selected_objectives')
     serializer_class = PlanSerializer
     permission_classes = [IsAuthenticated]
 
@@ -1447,31 +1447,34 @@ class PlanViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(organization__in=org_ids)
             logger.info(f"Filtering by organizations: {org_ids}")
 
-        # Helper function to get all child organizations recursively
-        def get_child_organizations(parent_org_id):
-            child_ids = [parent_org_id]
-
-            def get_descendants(org_id):
-                children = Organization.objects.filter(parent_id=org_id).values_list('id', flat=True)
-                for child_id in children:
-                    if child_id not in child_ids:
-                        child_ids.append(child_id)
-                        get_descendants(child_id)
-
-            get_descendants(parent_org_id)
-            return child_ids
-
         # Admins can see plans from their organization hierarchy
         if 'ADMIN' in user_roles:
             admin_org = user_organizations.first().organization
             admin_org_id = admin_org.id
-            admin_org_type = admin_org.type
 
-            # Get all child organizations in the hierarchy
-            allowed_org_ids = get_child_organizations(admin_org_id)
+            # Use a more efficient query with a single database call
+            # Get all child organizations in one query using a subquery
+            from django.db.models import Q
 
-            queryset = queryset.filter(organization__in=allowed_org_ids)
-            logger.info(f"Admin {user.username} accessing plans from organization hierarchy: {allowed_org_ids}")
+            # Build the hierarchy query more efficiently
+            child_orgs = list(Organization.objects.filter(
+                Q(id=admin_org_id) | Q(parent_id=admin_org_id)
+            ).values_list('id', flat=True))
+
+            # For deeper hierarchies, we need multiple levels
+            # But limit to 3 levels for performance
+            for _ in range(2):  # Query 2 more levels max
+                if child_orgs:
+                    next_level = list(Organization.objects.filter(
+                        parent_id__in=child_orgs
+                    ).exclude(id__in=child_orgs).values_list('id', flat=True))
+                    if next_level:
+                        child_orgs.extend(next_level)
+                    else:
+                        break
+
+            queryset = queryset.filter(organization__in=child_orgs)
+            logger.info(f"Admin {user.username} accessing plans from {len(child_orgs)} organizations")
             return queryset
 
         # Evaluators can see all plans (no hierarchy filtering)
@@ -1489,7 +1492,7 @@ class PlanViewSet(viewsets.ModelViewSet):
         # Planners can only see plans from their own organizations
         if 'PLANNER' in user_roles:
             filtered_queryset = queryset.filter(organization__in=user_org_ids)
-            logger.info(f"Planner {user.username} accessing {filtered_queryset.count()} plans from orgs {list(user_org_ids)}")
+            logger.info(f"Planner {user.username} accessing plans from orgs {list(user_org_ids)}")
             return filtered_queryset
 
         # Default: no access

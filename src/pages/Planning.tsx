@@ -257,7 +257,9 @@ const PlansTable: React.FC<PlansTableProps> = ({ onCreateNewPlan, userOrgId }) =
       }
     },
     enabled: !!userOrgId,
-    retry: 2
+    retry: 1,
+    staleTime: 1000 * 60 * 2, // Cache for 2 minutes
+    gcTime: 1000 * 60 * 5 // Keep in cache for 5 minutes
   });
 
   // Delete main activity mutation
