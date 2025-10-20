@@ -462,6 +462,26 @@ class PlanReviewSerializer(serializers.ModelSerializer):
             return f"{obj.evaluator.user.first_name} {obj.evaluator.user.last_name}".strip() or obj.evaluator.user.username
         return "System"
 
+class PlanListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for listing plans without nested objectives"""
+    organization_name = serializers.CharField(source='organization.name', read_only=True)
+    selected_objectives = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=StrategicObjective.objects.all(),
+        required=False
+    )
+    selected_objectives_weights = serializers.JSONField(required=False, allow_null=True)
+
+    class Meta:
+        model = Plan
+        fields = [
+            'id', 'organization', 'organization_name', 'planner_name', 'type',
+            'executive_name', 'strategic_objective', 'program', 'fiscal_year',
+            'from_date', 'to_date', 'status', 'submitted_at', 'selected_objectives',
+            'selected_objectives_weights', 'created_at', 'updated_at'
+        ]
+
+
 class PlanSerializer(serializers.ModelSerializer):
     organization_name = serializers.CharField(source='organization.name', read_only=True)
     objectives = serializers.SerializerMethodField()

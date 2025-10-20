@@ -28,7 +28,7 @@ from .serializers import (
     StrategicObjectiveSerializer, ProgramSerializer,
     StrategicInitiativeSerializer, PerformanceMeasureSerializer, MainActivitySerializer,
     ActivityBudgetSerializer,SubActivitySerializer, ActivityCostingAssumptionSerializer, InitiativeFeedSerializer,
-    PlanSerializer, PlanReviewSerializer,LocationSerializer, LandTransportSerializer,
+    PlanSerializer, PlanListSerializer, PlanReviewSerializer,LocationSerializer, LandTransportSerializer,
     AirTransportSerializer, PerDiemSerializer, AccommodationSerializer,
     ParticipantCostSerializer, SessionCostSerializer, PrintingCostSerializer,
     SupervisorCostSerializer,ProcurementItemSerializer, ReportSerializer,
@@ -1406,9 +1406,25 @@ class PlanViewSet(viewsets.ModelViewSet):
     serializer_class = PlanSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_serializer_class(self):
+        """Use lightweight serializer for list operations"""
+        if self.action == 'list':
+            return PlanListSerializer
+        return PlanSerializer
+
     def get_queryset(self):
         """Filter plans based on user's role and organization hierarchy"""
-        queryset = super().get_queryset()
+        # Use minimal queryset for list operations
+        if self.action == 'list':
+            queryset = Plan.objects.select_related('organization').only(
+                'id', 'organization', 'planner_name', 'type', 'executive_name',
+                'strategic_objective', 'program', 'fiscal_year', 'from_date',
+                'to_date', 'status', 'submitted_at', 'created_at', 'updated_at',
+                'selected_objectives_weights'
+            )
+        else:
+            queryset = super().get_queryset()
+
         user = self.request.user
 
         # Check for special 'all' parameter for evaluators/admins
