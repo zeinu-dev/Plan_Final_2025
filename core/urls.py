@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path, include, re_path
+from django.urls import path, include
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import TemplateView
 from django.conf import settings
@@ -8,24 +8,17 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('organizations.urls')),
-]
-
-# Serve media files
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-
-# Serve static files (Vite build assets)
-urlpatterns += static(settings.STATIC_URL, document_root=settings.BASE_DIR / 'dist/assets')
-
-# Frontend routes - these must come AFTER static file routes
-urlpatterns += [
+    # Serve the frontend for all routes
     path('', ensure_csrf_cookie(TemplateView.as_view(template_name='index.html'))),
     path('login/', ensure_csrf_cookie(TemplateView.as_view(template_name='index.html'))),
     path('dashboard/', ensure_csrf_cookie(TemplateView.as_view(template_name='index.html'))),
     path('planning/', ensure_csrf_cookie(TemplateView.as_view(template_name='index.html'))),
-    path('reporting/', ensure_csrf_cookie(TemplateView.as_view(template_name='index.html'))),
-    # Catch all other routes and serve the frontend (must be last)
-    re_path(r'^(?!assets/|api/|admin/|media/).*$', ensure_csrf_cookie(TemplateView.as_view(template_name='index.html'))),
+    # Catch all other routes and serve the frontend
+    path('<path:path>', ensure_csrf_cookie(TemplateView.as_view(template_name='index.html'))),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 
 
