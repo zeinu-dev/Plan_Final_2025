@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FileText, Upload, AlertCircle, CheckCircle, ArrowLeft, Loader, Save, Eye } from 'lucide-react';
@@ -6,6 +6,72 @@ import { api } from '../lib/api';
 import { REPORT_TYPES, Report, ReportPlanData, PerformanceAchievement, ActivityAchievement } from '../types/report';
 import { HorizontalMEReportTable } from '../components/HorizontalMEReportTable';
 import { BudgetUtilizationForm } from '../components/BudgetUtilizationForm';
+
+// Helper function to group flat plan data by objective and initiative
+const groupPlanData = (flatData: ReportPlanData[]) => {
+  const objectivesMap = new Map<number, {
+    id: number;
+    title: string;
+    weight: number;
+    initiatives: Array<{
+      id: number;
+      name: string;
+      weight: number;
+      performance_measures: any[];
+      main_activities: any[];
+    }>;
+  }>();
+
+  // Track all activities globally to detect cross-initiative duplicates
+  const globalActivityIds = new Set<number>();
+
+  flatData.forEach((item) => {
+    // Get or create objective
+    if (!objectivesMap.has(item.objective_id)) {
+      objectivesMap.set(item.objective_id, {
+        id: item.objective_id,
+        title: item.objective_title,
+        weight: item.objective_weight,
+        initiatives: []
+      });
+    }
+
+    const objective = objectivesMap.get(item.objective_id)!;
+
+    // Check if initiative already exists
+    let initiative = objective.initiatives.find(i => i.id === item.initiative_id);
+    if (!initiative) {
+      initiative = {
+        id: item.initiative_id,
+        name: item.initiative_name,
+        weight: item.initiative_weight,
+        performance_measures: [],
+        main_activities: []
+      };
+      objective.initiatives.push(initiative);
+    }
+
+    // Add performance measures (avoid duplicates within initiative)
+    item.performance_measures.forEach(measure => {
+      if (!initiative!.performance_measures.find(m => m.id === measure.id)) {
+        initiative!.performance_measures.push(measure);
+      }
+    });
+
+    // Add main activities (avoid duplicates globally, not just within initiative)
+    item.main_activities.forEach(activity => {
+      // Check if this activity has already been added to ANY initiative
+      if (!globalActivityIds.has(activity.id)) {
+        globalActivityIds.add(activity.id);
+        initiative!.main_activities.push(activity);
+      } else {
+        console.warn(`⚠️ Duplicate activity ${activity.id} "${activity.name}" detected - skipping (already in another initiative)`);
+      }
+    });
+  });
+
+  return Array.from(objectivesMap.values());
+};
 
 const Reporting: React.FC = () => {
   const navigate = useNavigate();
@@ -115,6 +181,14 @@ const Reporting: React.FC = () => {
     retry: 1
   });
 
+  // Group plan data by objective and initiative
+  const groupedPlanData = useMemo(() => {
+    if (!planData?.plan_data || planData.plan_data.length === 0) {
+      return [];
+    }
+    return groupPlanData(planData.plan_data);
+  }, [planData]);
+
   // Log whenever query conditions change
   React.useEffect(() => {
     console.log('=== QUERY CONDITIONS ===');
@@ -123,7 +197,8 @@ const Reporting: React.FC = () => {
     console.log('enabled:', !!reportId && (step === 2 || step === 3 || step === 4));
     console.log('isLoadingPlan:', isLoadingPlan);
     console.log('planData:', planData);
-  }, [reportId, step, isLoadingPlan, planData]);
+    console.log('groupedPlanData:', groupedPlanData);
+  }, [reportId, step, isLoadingPlan, planData, groupedPlanData]);
 
   const { data: existingAchievements } = useQuery({
     queryKey: ['report-achievements', reportId, selectedReportType],
@@ -502,18 +577,23 @@ const Reporting: React.FC = () => {
       return;
     }
 
-    const allPerformanceValid = planData?.plan_data?.every((initiative: ReportPlanData) =>
-      initiative.performance_measures.every(measure => {
-        const achievement = performanceAchievements[measure.id];
-        return achievement && achievement.achievement !== undefined && achievement.justification;
-      })
+    // Validate using grouped data
+    const allPerformanceValid = groupedPlanData.every(objective =>
+      objective.initiatives.every(initiative =>
+        initiative.performance_measures.every(measure => {
+          const achievement = performanceAchievements[measure.id];
+          return achievement && achievement.achievement !== undefined && achievement.justification;
+        })
+      )
     );
 
-    const allActivitiesValid = planData?.plan_data?.every((initiative: ReportPlanData) =>
-      initiative.main_activities.every(activity => {
-        const achievement = activityAchievements[activity.id];
-        return achievement && achievement.achievement !== undefined && achievement.justification;
-      })
+    const allActivitiesValid = groupedPlanData.every(objective =>
+      objective.initiatives.every(initiative =>
+        initiative.main_activities.every(activity => {
+          const achievement = activityAchievements[activity.id];
+          return achievement && achievement.achievement !== undefined && achievement.justification;
+        })
+      )
     );
 
     if (!allPerformanceValid || !allActivitiesValid) {
@@ -824,109 +904,121 @@ const Reporting: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-6">
-              {planData.plan_data.map((initiative: ReportPlanData, idx: number) => (
-                <div key={idx} className="border border-gray-200 rounded-lg p-4">
-                  <div className="mb-4">
-                    <h3 className="font-semibold text-lg">{initiative.objective_title}</h3>
-                    <p className="text-sm text-gray-600">Weight: {initiative.objective_weight}%</p>
-                    <p className="text-sm text-gray-700 mt-1">{initiative.initiative_name}</p>
+              {groupedPlanData.map((objective) => (
+                <div key={objective.id} className="border-2 border-blue-200 rounded-lg p-6 bg-blue-50">
+                  {/* Objective Header */}
+                  <div className="mb-6 pb-4 border-b-2 border-blue-300">
+                    <h3 className="font-bold text-xl text-blue-900">{objective.title}</h3>
+                    <p className="text-sm text-blue-700 font-medium">Weight: {objective.weight}%</p>
                   </div>
 
-                  {initiative.performance_measures.length > 0 && (
-                    <div className="mb-4">
-                      <h4 className="font-medium mb-2">Performance Measures</h4>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Measure</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Weight</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Target</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Achievement</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Justification</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {initiative.performance_measures.map((measure) => (
-                              <tr key={measure.id}>
-                                <td className="px-4 py-2 text-sm">{measure.name}</td>
-                                <td className="px-4 py-2 text-sm">{measure.weight}%</td>
-                                <td className="px-4 py-2 text-sm">{measure.target}</td>
-                                <td className="px-4 py-2">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="any"
-                                    value={performanceAchievements[measure.id]?.achievement ?? ''}
-                                    onChange={(e) => handlePerformanceAchievementChange(measure.id, 'achievement', e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                                    className="w-full px-2 py-1 border border-gray-300 rounded"
-                                    placeholder="0"
-                                  />
-                                </td>
-                                <td className="px-4 py-2">
-                                  <textarea
-                                    value={performanceAchievements[measure.id]?.justification || ''}
-                                    onChange={(e) => handlePerformanceAchievementChange(measure.id, 'justification', e.target.value)}
-                                    className="w-full px-2 py-1 border border-gray-300 rounded"
-                                    rows={2}
-                                    placeholder="Explain achievement..."
-                                  />
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
+                  {/* Initiatives */}
+                  <div className="space-y-4">
+                    {objective.initiatives.map((initiative) => (
+                      <div key={initiative.id} className="border border-gray-300 rounded-lg p-4 bg-white">
+                        <div className="mb-4 pb-3 border-b border-gray-200">
+                          <h4 className="font-semibold text-lg text-gray-800">{initiative.name}</h4>
+                          <p className="text-sm text-gray-600">Weight: {initiative.weight}%</p>
+                        </div>
 
-                  {initiative.main_activities.length > 0 && (
-                    <div>
-                      <h4 className="font-medium mb-2">Main Activities</h4>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Activity</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Weight</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Target</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Achievement</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Justification</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {initiative.main_activities.map((activity) => (
-                              <tr key={activity.id}>
-                                <td className="px-4 py-2 text-sm">{activity.name}</td>
-                                <td className="px-4 py-2 text-sm">{activity.weight}%</td>
-                                <td className="px-4 py-2 text-sm">{activity.target}</td>
-                                <td className="px-4 py-2">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="any"
-                                    value={activityAchievements[activity.id]?.achievement ?? ''}
-                                    onChange={(e) => handleActivityAchievementChange(activity.id, 'achievement', e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                                    className="w-full px-2 py-1 border border-gray-300 rounded"
-                                    placeholder="0"
-                                  />
-                                </td>
-                                <td className="px-4 py-2">
-                                  <textarea
-                                    value={activityAchievements[activity.id]?.justification || ''}
-                                    onChange={(e) => handleActivityAchievementChange(activity.id, 'justification', e.target.value)}
-                                    className="w-full px-2 py-1 border border-gray-300 rounded"
-                                    rows={2}
-                                    placeholder="Explain achievement..."
-                                  />
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        {initiative.performance_measures.length > 0 && (
+                          <div className="mb-4">
+                            <h5 className="font-medium mb-2 text-gray-700">Performance Measures</h5>
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Measure</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Weight</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Target</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Achievement</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Justification</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {initiative.performance_measures.map((measure) => (
+                                    <tr key={measure.id}>
+                                      <td className="px-4 py-2 text-sm">{measure.name}</td>
+                                      <td className="px-4 py-2 text-sm">{measure.weight}%</td>
+                                      <td className="px-4 py-2 text-sm">{measure.target}</td>
+                                      <td className="px-4 py-2">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="any"
+                                          value={performanceAchievements[measure.id]?.achievement ?? ''}
+                                          onChange={(e) => handlePerformanceAchievementChange(measure.id, 'achievement', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                          className="w-full px-2 py-1 border border-gray-300 rounded"
+                                          placeholder="0"
+                                        />
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <textarea
+                                          value={performanceAchievements[measure.id]?.justification || ''}
+                                          onChange={(e) => handlePerformanceAchievementChange(measure.id, 'justification', e.target.value)}
+                                          className="w-full px-2 py-1 border border-gray-300 rounded"
+                                          rows={2}
+                                          placeholder="Explain achievement..."
+                                        />
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {initiative.main_activities.length > 0 && (
+                          <div>
+                            <h5 className="font-medium mb-2 text-gray-700">Main Activities</h5>
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Activity</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Weight</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Target</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Achievement</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Justification</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                  {initiative.main_activities.map((activity) => (
+                                    <tr key={activity.id}>
+                                      <td className="px-4 py-2 text-sm">{activity.name}</td>
+                                      <td className="px-4 py-2 text-sm">{activity.weight}%</td>
+                                      <td className="px-4 py-2 text-sm">{activity.target}</td>
+                                      <td className="px-4 py-2">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="any"
+                                          value={activityAchievements[activity.id]?.achievement ?? ''}
+                                          onChange={(e) => handleActivityAchievementChange(activity.id, 'achievement', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                          className="w-full px-2 py-1 border border-gray-300 rounded"
+                                          placeholder="0"
+                                        />
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <textarea
+                                          value={activityAchievements[activity.id]?.justification || ''}
+                                          onChange={(e) => handleActivityAchievementChange(activity.id, 'justification', e.target.value)}
+                                          className="w-full px-2 py-1 border border-gray-300 rounded"
+                                          rows={2}
+                                          placeholder="Explain achievement..."
+                                        />
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>

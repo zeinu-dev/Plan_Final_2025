@@ -2373,6 +2373,8 @@ class ReportViewSet(viewsets.ModelViewSet):
             logger.info(f"Found {objectives.count()} selected objectives in plan")
 
             plan_data = []
+            # Track activities to detect duplicates
+            activity_tracking = {}  # activity_id -> list of initiative_ids where it appears
 
             for objective in objectives:
                 logger.info(f"Processing objective: {objective.id} - {objective.title}")
@@ -2406,7 +2408,7 @@ class ReportViewSet(viewsets.ModelViewSet):
                     }
 
                     for measure in measures:
-                        logger.info(f"Processing measure {measure.id}: {measure.name}, target_type: {measure.target_type}")
+                        logger.info(f"Processing measure {measure.id}: {measure.name}, target_type: {measure.target_type}, selected_quarters: {measure.selected_quarters}, selected_months: {measure.selected_months}")
                         target = self._get_target_for_period(measure, report_type)
                         logger.info(f"Calculated target for measure {measure.id}: {target}")
 
@@ -2422,9 +2424,17 @@ class ReportViewSet(viewsets.ModelViewSet):
                             logger.warning(f"Skipping measure {measure.id} - no valid target for {report_type}")
 
                     for activity in activities:
-                        logger.info(f"Processing activity {activity.id}: {activity.name}, target_type: {activity.target_type}")
+                        # Track activity appearances
+                        if activity.id in activity_tracking:
+                            activity_tracking[activity.id].append(initiative.id)
+                            logger.warning(f"⚠️ DUPLICATE: Activity {activity.id} '{activity.name}' appears in multiple initiatives: {activity_tracking[activity.id]}")
+                        else:
+                            activity_tracking[activity.id] = [initiative.id]
+
+                        logger.info(f"Processing activity {activity.id}: {activity.name}, initiative: {initiative.id}, target_type: {activity.target_type}, selected_quarters: {activity.selected_quarters}, selected_months: {activity.selected_months}")
+                        logger.info(f"Activity {activity.id} targets - Q1: {activity.q1_target}, Q2: {activity.q2_target}, Q3: {activity.q3_target}, Q4: {activity.q4_target}, Annual: {activity.annual_target}, Baseline: {activity.baseline}")
                         target = self._get_target_for_period(activity, report_type)
-                        logger.info(f"Calculated target for activity {activity.id}: {target}")
+                        logger.info(f"Calculated target for activity {activity.id}: {target} (should NOT be baseline: {activity.baseline})")
 
                         if target is not None and target > 0:
                             sub_activities_data = []
@@ -2465,6 +2475,15 @@ class ReportViewSet(viewsets.ModelViewSet):
                         logger.warning(f"Skipping initiative {initiative.id} - no valid measures or activities")
 
             logger.info(f"Returning {len(plan_data)} initiative entries for report {pk}")
+
+            # Log duplicate activities summary
+            duplicates = {aid: initiatives for aid, initiatives in activity_tracking.items() if len(initiatives) > 1}
+            if duplicates:
+                logger.error(f"❌ FOUND {len(duplicates)} DUPLICATE ACTIVITIES:")
+                for activity_id, initiative_ids in duplicates.items():
+                    logger.error(f"  Activity ID {activity_id} appears in initiatives: {initiative_ids}")
+            else:
+                logger.info("✓ No duplicate activities found")
 
             me_data = self._build_me_data(report)
 
@@ -2668,10 +2687,23 @@ class ReportViewSet(viewsets.ModelViewSet):
         """
         Get the target value for a specific reporting period.
         Filters based on selected_quarters/selected_months and returns appropriate target.
+        Returns None if the activity/measure is not planned for this reporting period.
         """
-        # Get selected periods
+        # Get selected periods - handle None, null, or empty arrays
         selected_quarters = obj.selected_quarters if hasattr(obj, 'selected_quarters') and obj.selected_quarters else []
         selected_months = obj.selected_months if hasattr(obj, 'selected_months') and obj.selected_months else []
+
+        # Ensure they are lists (not None or other types)
+        if not isinstance(selected_quarters, list):
+            selected_quarters = []
+        if not isinstance(selected_months, list):
+            selected_months = []
+
+        # If both quarters and months are empty, this activity/measure has no period selection
+        # which means it should not appear in any quarterly reports (invalid data)
+        if not selected_quarters and not selected_months:
+            logger.warning(f"Activity/Measure {obj.id} has no selected quarters or months - skipping")
+            return None
 
         # Map report types to quarters
         report_quarters_map = {
@@ -2708,6 +2740,7 @@ class ReportViewSet(viewsets.ModelViewSet):
 
         # If not planned for this period, return None
         if not has_matching_quarter and not has_matching_month:
+            logger.debug(f"Activity/Measure {obj.id} not planned for {report_type}. Selected: Q={selected_quarters}, M={selected_months}")
             return None
 
         # Check if quarterly targets are defined (non-zero)
