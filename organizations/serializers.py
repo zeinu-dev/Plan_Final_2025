@@ -709,11 +709,30 @@ class PerformanceAchievementSerializer(serializers.ModelSerializer):
         model = PerformanceAchievement
         fields = ['id', 'report', 'performance_measure', 'performance_measure_name', 'achievement', 'justification', 'created_at', 'updated_at']
 
-    def validate_achievement(self, value):
-        """Ensure achievement value is not negative"""
-        if value is not None and value < 0:
-            raise serializers.ValidationError('Achievement value cannot be negative.')
-        return value
+    def validate(self, attrs):
+        """Validate achievement value"""
+        achievement = attrs.get('achievement')
+
+        # Check for negative values
+        if achievement is not None and achievement < 0:
+            raise serializers.ValidationError({'achievement': 'Achievement value cannot be negative.'})
+
+        # Check against target if we have the necessary data
+        if achievement is not None:
+            performance_measure = attrs.get('performance_measure') or (self.instance.performance_measure if self.instance else None)
+            report = attrs.get('report') or (self.instance.report if self.instance else None)
+
+            if performance_measure and report:
+                # Calculate target for the reporting period
+                from organizations.views import ReportViewSet
+                target = ReportViewSet()._get_target_for_period(performance_measure, report.report_type)
+
+                if target is not None and achievement > target:
+                    raise serializers.ValidationError({
+                        'achievement': f'Achievement ({achievement}) cannot exceed target ({target}) for this reporting period.'
+                    })
+
+        return attrs
 
 class ActivityAchievementSerializer(serializers.ModelSerializer):
     main_activity_name = serializers.CharField(source='main_activity.name', read_only=True)
@@ -722,11 +741,30 @@ class ActivityAchievementSerializer(serializers.ModelSerializer):
         model = ActivityAchievement
         fields = ['id', 'report', 'main_activity', 'main_activity_name', 'achievement', 'justification', 'created_at', 'updated_at']
 
-    def validate_achievement(self, value):
-        """Ensure achievement value is not negative"""
-        if value is not None and value < 0:
-            raise serializers.ValidationError('Achievement value cannot be negative.')
-        return value
+    def validate(self, attrs):
+        """Validate achievement value"""
+        achievement = attrs.get('achievement')
+
+        # Check for negative values
+        if achievement is not None and achievement < 0:
+            raise serializers.ValidationError({'achievement': 'Achievement value cannot be negative.'})
+
+        # Check against target if we have the necessary data
+        if achievement is not None:
+            main_activity = attrs.get('main_activity') or (self.instance.main_activity if self.instance else None)
+            report = attrs.get('report') or (self.instance.report if self.instance else None)
+
+            if main_activity and report:
+                # Calculate target for the reporting period
+                from organizations.views import ReportViewSet
+                target = ReportViewSet()._get_target_for_period(main_activity, report.report_type)
+
+                if target is not None and achievement > target:
+                    raise serializers.ValidationError({
+                        'achievement': f'Achievement ({achievement}) cannot exceed target ({target}) for this reporting period.'
+                    })
+
+        return attrs
 
 class SubActivityBudgetUtilizationSerializer(serializers.ModelSerializer):
     sub_activity_name = serializers.CharField(source='sub_activity.name', read_only=True)

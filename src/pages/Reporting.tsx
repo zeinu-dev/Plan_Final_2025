@@ -525,12 +525,20 @@ const Reporting: React.FC = () => {
     });
   };
 
-  const handlePerformanceAchievementChange = (measureId: number, field: 'achievement' | 'justification', value: any) => {
-    // Validate achievement value is not negative
-    if (field === 'achievement' && value !== undefined && value < 0) {
-      setError('Achievement value cannot be negative');
-      setTimeout(() => setError(null), 3000);
-      return;
+  const handlePerformanceAchievementChange = (measureId: number, field: 'achievement' | 'justification', value: any, target?: number) => {
+    // Validate achievement value
+    if (field === 'achievement' && value !== undefined) {
+      if (value < 0) {
+        setError('Achievement value cannot be negative');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+
+      if (target !== undefined && value > target) {
+        setError(`Achievement (${value}) cannot exceed target (${target})`);
+        setTimeout(() => setError(null), 5000);
+        return;
+      }
     }
 
     setPerformanceAchievements(prev => ({
@@ -544,12 +552,20 @@ const Reporting: React.FC = () => {
     }));
   };
 
-  const handleActivityAchievementChange = (activityId: number, field: 'achievement' | 'justification', value: any) => {
-    // Validate achievement value is not negative
-    if (field === 'achievement' && value !== undefined && value < 0) {
-      setError('Achievement value cannot be negative');
-      setTimeout(() => setError(null), 3000);
-      return;
+  const handleActivityAchievementChange = (activityId: number, field: 'achievement' | 'justification', value: any, target?: number) => {
+    // Validate achievement value
+    if (field === 'achievement' && value !== undefined) {
+      if (value < 0) {
+        setError('Achievement value cannot be negative');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+
+      if (target !== undefined && value > target) {
+        setError(`Achievement (${value}) cannot exceed target (${target})`);
+        setTimeout(() => setError(null), 5000);
+        return;
+      }
     }
 
     setActivityAchievements(prev => ({
@@ -574,6 +590,36 @@ const Reporting: React.FC = () => {
 
     if (hasNegativePerformance || hasNegativeActivity) {
       setError('Achievement values cannot be negative');
+      return;
+    }
+
+    // Check if achievements exceed targets
+    let exceededTargetError = '';
+    for (const objective of groupedPlanData) {
+      for (const initiative of objective.initiatives) {
+        for (const measure of initiative.performance_measures) {
+          const achievement = performanceAchievements[measure.id];
+          if (achievement?.achievement !== undefined && achievement.achievement > measure.target) {
+            exceededTargetError = `Performance measure "${measure.name}" achievement (${achievement.achievement}) exceeds target (${measure.target})`;
+            break;
+          }
+        }
+        if (exceededTargetError) break;
+
+        for (const activity of initiative.main_activities) {
+          const achievement = activityAchievements[activity.id];
+          if (achievement?.achievement !== undefined && achievement.achievement > activity.target) {
+            exceededTargetError = `Activity "${activity.name}" achievement (${achievement.achievement}) exceeds target (${activity.target})`;
+            break;
+          }
+        }
+        if (exceededTargetError) break;
+      }
+      if (exceededTargetError) break;
+    }
+
+    if (exceededTargetError) {
+      setError(exceededTargetError);
       return;
     }
 
@@ -940,16 +986,18 @@ const Reporting: React.FC = () => {
                                     <tr key={measure.id}>
                                       <td className="px-4 py-2 text-sm">{measure.name}</td>
                                       <td className="px-4 py-2 text-sm">{measure.weight}%</td>
-                                      <td className="px-4 py-2 text-sm">{measure.target}</td>
+                                      <td className="px-4 py-2 text-sm font-medium text-blue-600">{measure.target}</td>
                                       <td className="px-4 py-2">
                                         <input
                                           type="number"
                                           min="0"
+                                          max={measure.target}
                                           step="any"
                                           value={performanceAchievements[measure.id]?.achievement ?? ''}
-                                          onChange={(e) => handlePerformanceAchievementChange(measure.id, 'achievement', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                          onChange={(e) => handlePerformanceAchievementChange(measure.id, 'achievement', e.target.value === '' ? undefined : parseFloat(e.target.value), measure.target)}
                                           className="w-full px-2 py-1 border border-gray-300 rounded"
-                                          placeholder="0"
+                                          placeholder={`0 - ${measure.target}`}
+                                          title={`Maximum: ${measure.target}`}
                                         />
                                       </td>
                                       <td className="px-4 py-2">
@@ -988,16 +1036,18 @@ const Reporting: React.FC = () => {
                                     <tr key={activity.id}>
                                       <td className="px-4 py-2 text-sm">{activity.name}</td>
                                       <td className="px-4 py-2 text-sm">{activity.weight}%</td>
-                                      <td className="px-4 py-2 text-sm">{activity.target}</td>
+                                      <td className="px-4 py-2 text-sm font-medium text-blue-600">{activity.target}</td>
                                       <td className="px-4 py-2">
                                         <input
                                           type="number"
                                           min="0"
+                                          max={activity.target}
                                           step="any"
                                           value={activityAchievements[activity.id]?.achievement ?? ''}
-                                          onChange={(e) => handleActivityAchievementChange(activity.id, 'achievement', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                          onChange={(e) => handleActivityAchievementChange(activity.id, 'achievement', e.target.value === '' ? undefined : parseFloat(e.target.value), activity.target)}
                                           className="w-full px-2 py-1 border border-gray-300 rounded"
-                                          placeholder="0"
+                                          placeholder={`0 - ${activity.target}`}
+                                          title={`Maximum: ${activity.target}`}
                                         />
                                       </td>
                                       <td className="px-4 py-2">
