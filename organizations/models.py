@@ -1381,6 +1381,11 @@ class PerformanceAchievement(models.Model):
     class Meta:
         unique_together = ('report', 'performance_measure')
 
+    def clean(self):
+        super().clean()
+        if self.achievement is not None and self.achievement < 0:
+            raise ValidationError('Achievement value cannot be negative.')
+
     def __str__(self):
         return f"{self.performance_measure.name} - {self.achievement}"
 
@@ -1409,6 +1414,11 @@ class ActivityAchievement(models.Model):
 
     class Meta:
         unique_together = ('report', 'main_activity')
+
+    def clean(self):
+        super().clean()
+        if self.achievement is not None and self.achievement < 0:
+            raise ValidationError('Achievement value cannot be negative.')
 
     def __str__(self):
         return f"{self.main_activity.name} - {self.achievement}"

@@ -709,12 +709,24 @@ class PerformanceAchievementSerializer(serializers.ModelSerializer):
         model = PerformanceAchievement
         fields = ['id', 'report', 'performance_measure', 'performance_measure_name', 'achievement', 'justification', 'created_at', 'updated_at']
 
+    def validate_achievement(self, value):
+        """Ensure achievement value is not negative"""
+        if value is not None and value < 0:
+            raise serializers.ValidationError('Achievement value cannot be negative.')
+        return value
+
 class ActivityAchievementSerializer(serializers.ModelSerializer):
     main_activity_name = serializers.CharField(source='main_activity.name', read_only=True)
 
     class Meta:
         model = ActivityAchievement
         fields = ['id', 'report', 'main_activity', 'main_activity_name', 'achievement', 'justification', 'created_at', 'updated_at']
+
+    def validate_achievement(self, value):
+        """Ensure achievement value is not negative"""
+        if value is not None and value < 0:
+            raise serializers.ValidationError('Achievement value cannot be negative.')
+        return value
 
 class SubActivityBudgetUtilizationSerializer(serializers.ModelSerializer):
     sub_activity_name = serializers.CharField(source='sub_activity.name', read_only=True)

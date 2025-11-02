@@ -451,6 +451,13 @@ const Reporting: React.FC = () => {
   };
 
   const handlePerformanceAchievementChange = (measureId: number, field: 'achievement' | 'justification', value: any) => {
+    // Validate achievement value is not negative
+    if (field === 'achievement' && value !== undefined && value < 0) {
+      setError('Achievement value cannot be negative');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
     setPerformanceAchievements(prev => ({
       ...prev,
       [measureId]: {
@@ -463,6 +470,13 @@ const Reporting: React.FC = () => {
   };
 
   const handleActivityAchievementChange = (activityId: number, field: 'achievement' | 'justification', value: any) => {
+    // Validate achievement value is not negative
+    if (field === 'achievement' && value !== undefined && value < 0) {
+      setError('Achievement value cannot be negative');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
     setActivityAchievements(prev => ({
       ...prev,
       [activityId]: {
@@ -475,6 +489,19 @@ const Reporting: React.FC = () => {
   };
 
   const handleSaveAchievements = () => {
+    // Check for negative values first
+    const hasNegativePerformance = Object.values(performanceAchievements).some(
+      achievement => achievement.achievement !== undefined && achievement.achievement < 0
+    );
+    const hasNegativeActivity = Object.values(activityAchievements).some(
+      achievement => achievement.achievement !== undefined && achievement.achievement < 0
+    );
+
+    if (hasNegativePerformance || hasNegativeActivity) {
+      setError('Achievement values cannot be negative');
+      return;
+    }
+
     const allPerformanceValid = planData?.plan_data?.every((initiative: ReportPlanData) =>
       initiative.performance_measures.every(measure => {
         const achievement = performanceAchievements[measure.id];
@@ -828,6 +855,8 @@ const Reporting: React.FC = () => {
                                 <td className="px-4 py-2">
                                   <input
                                     type="number"
+                                    min="0"
+                                    step="any"
                                     value={performanceAchievements[measure.id]?.achievement ?? ''}
                                     onChange={(e) => handlePerformanceAchievementChange(measure.id, 'achievement', e.target.value === '' ? undefined : parseFloat(e.target.value))}
                                     className="w-full px-2 py-1 border border-gray-300 rounded"
@@ -874,6 +903,8 @@ const Reporting: React.FC = () => {
                                 <td className="px-4 py-2">
                                   <input
                                     type="number"
+                                    min="0"
+                                    step="any"
                                     value={activityAchievements[activity.id]?.achievement ?? ''}
                                     onChange={(e) => handleActivityAchievementChange(activity.id, 'achievement', e.target.value === '' ? undefined : parseFloat(e.target.value))}
                                     className="w-full px-2 py-1 border border-gray-300 rounded"
