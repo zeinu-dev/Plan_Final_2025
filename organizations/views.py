@@ -2821,22 +2821,40 @@ class PerformanceAchievementViewSet(viewsets.ModelViewSet):
             except Report.DoesNotExist:
                 return Response({'error': 'Report not found'}, status=status.HTTP_404_NOT_FOUND)
 
+            # Get ReportViewSet instance to access _get_target_for_period
+            report_viewset = ReportViewSet()
+
             created_or_updated = []
-            valid_measure_ids = [a.get('performance_measure') for a in achievements if a.get('performance_measure')]
+            valid_measure_ids = []
+
+            # Validate each measure is planned for this report period
+            for achievement_data in achievements:
+                performance_measure_id = achievement_data.get('performance_measure')
+                if not performance_measure_id:
+                    continue
+
+                try:
+                    measure = PerformanceMeasure.objects.get(id=performance_measure_id)
+                    target = report_viewset._get_target_for_period(measure, report.report_type)
+
+                    # Only include if measure is planned for this period
+                    if target and target > 0:
+                        valid_measure_ids.append(performance_measure_id)
+                    else:
+                        logger.warning(f"Skipping measure {performance_measure_id} - not planned for {report.report_type}")
+                except PerformanceMeasure.DoesNotExist:
+                    logger.warning(f"Measure {performance_measure_id} not found")
+                    continue
 
             with transaction.atomic():
-                # Delete achievements that are no longer in the list (removed from period)
-                PerformanceAchievement.objects.filter(
-                    report_id=report_id
-                ).exclude(
-                    performance_measure_id__in=valid_measure_ids
-                ).delete()
+                # Delete ALL existing achievements for this report (to clean up any invalid ones)
+                PerformanceAchievement.objects.filter(report_id=report_id).delete()
 
-                # Create or update achievements for current period
+                # Create or update only valid achievements for current period
                 for achievement_data in achievements:
                     performance_measure_id = achievement_data.get('performance_measure')
 
-                    if not performance_measure_id:
+                    if not performance_measure_id or performance_measure_id not in valid_measure_ids:
                         continue
 
                     obj, created = PerformanceAchievement.objects.update_or_create(
@@ -2887,22 +2905,40 @@ class ActivityAchievementViewSet(viewsets.ModelViewSet):
             except Report.DoesNotExist:
                 return Response({'error': 'Report not found'}, status=status.HTTP_404_NOT_FOUND)
 
+            # Get ReportViewSet instance to access _get_target_for_period
+            report_viewset = ReportViewSet()
+
             created_or_updated = []
-            valid_activity_ids = [a.get('main_activity') for a in achievements if a.get('main_activity')]
+            valid_activity_ids = []
+
+            # Validate each activity is planned for this report period
+            for achievement_data in achievements:
+                main_activity_id = achievement_data.get('main_activity')
+                if not main_activity_id:
+                    continue
+
+                try:
+                    activity = MainActivity.objects.get(id=main_activity_id)
+                    target = report_viewset._get_target_for_period(activity, report.report_type)
+
+                    # Only include if activity is planned for this period
+                    if target and target > 0:
+                        valid_activity_ids.append(main_activity_id)
+                    else:
+                        logger.warning(f"Skipping activity {main_activity_id} - not planned for {report.report_type}")
+                except MainActivity.DoesNotExist:
+                    logger.warning(f"Activity {main_activity_id} not found")
+                    continue
 
             with transaction.atomic():
-                # Delete achievements that are no longer in the list (removed from period)
-                ActivityAchievement.objects.filter(
-                    report_id=report_id
-                ).exclude(
-                    main_activity_id__in=valid_activity_ids
-                ).delete()
+                # Delete ALL existing achievements for this report (to clean up any invalid ones)
+                ActivityAchievement.objects.filter(report_id=report_id).delete()
 
-                # Create or update achievements for current period
+                # Create or update only valid achievements for current period
                 for achievement_data in achievements:
                     main_activity_id = achievement_data.get('main_activity')
 
-                    if not main_activity_id:
+                    if not main_activity_id or main_activity_id not in valid_activity_ids:
                         continue
 
                     obj, created = ActivityAchievement.objects.update_or_create(
