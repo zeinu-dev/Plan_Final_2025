@@ -22,8 +22,10 @@ const groupPlanData = (flatData: ReportPlanData[]) => {
     }>;
   }>();
 
-  // Track all activities globally to detect cross-initiative duplicates
+  // Track globally to prevent duplicates across initiatives
+  const globalMeasureIds = new Set<number>();
   const globalActivityIds = new Set<number>();
+  const processedInitiatives = new Set<number>();
 
   flatData.forEach((item) => {
     // Get or create objective
@@ -38,9 +40,16 @@ const groupPlanData = (flatData: ReportPlanData[]) => {
 
     const objective = objectivesMap.get(item.objective_id)!;
 
-    // Check if initiative already exists
+    // Check if initiative already exists (prevent duplicate initiatives)
     let initiative = objective.initiatives.find(i => i.id === item.initiative_id);
     if (!initiative) {
+      // Skip if this initiative was already processed in another objective
+      if (processedInitiatives.has(item.initiative_id)) {
+        console.warn(`⚠️ Duplicate initiative ${item.initiative_id} "${item.initiative_name}" detected - skipping`);
+        return;
+      }
+
+      processedInitiatives.add(item.initiative_id);
       initiative = {
         id: item.initiative_id,
         name: item.initiative_name,
@@ -51,14 +60,17 @@ const groupPlanData = (flatData: ReportPlanData[]) => {
       objective.initiatives.push(initiative);
     }
 
-    // Add performance measures (avoid duplicates within initiative)
+    // Add performance measures (avoid duplicates globally)
     item.performance_measures.forEach(measure => {
-      if (!initiative!.performance_measures.find(m => m.id === measure.id)) {
+      if (!globalMeasureIds.has(measure.id)) {
+        globalMeasureIds.add(measure.id);
         initiative!.performance_measures.push(measure);
+      } else {
+        console.warn(`⚠️ Duplicate measure ${measure.id} "${measure.name}" detected - skipping (already in another initiative)`);
       }
     });
 
-    // Add main activities (avoid duplicates globally, not just within initiative)
+    // Add main activities (avoid duplicates globally)
     item.main_activities.forEach(activity => {
       // Check if this activity has already been added to ANY initiative
       if (!globalActivityIds.has(activity.id)) {
@@ -69,6 +81,9 @@ const groupPlanData = (flatData: ReportPlanData[]) => {
       }
     });
   });
+
+  // Log summary
+  console.log(`✓ Grouped plan data: ${objectivesMap.size} objectives, ${processedInitiatives.size} unique initiatives, ${globalMeasureIds.size} unique measures, ${globalActivityIds.size} unique activities`);
 
   return Array.from(objectivesMap.values());
 };
@@ -670,7 +685,19 @@ const Reporting: React.FC = () => {
 
     const objectivesMap = new Map();
 
+    // Track processed items to prevent duplicates
+    const processedInitiatives = new Set<number>();
+    const processedMeasures = new Set<number>();
+    const processedActivities = new Set<number>();
+
     planData.plan_data.forEach((initiative: ReportPlanData) => {
+      // Skip duplicate initiatives
+      if (processedInitiatives.has(initiative.initiative_id)) {
+        console.warn(`⚠️ ME Report: Skipping duplicate initiative ${initiative.initiative_id}`);
+        return;
+      }
+      processedInitiatives.add(initiative.initiative_id);
+
       if (!objectivesMap.has(initiative.objective_id)) {
         objectivesMap.set(initiative.objective_id, {
           id: initiative.objective_id,
@@ -682,70 +709,90 @@ const Reporting: React.FC = () => {
 
       const objective = objectivesMap.get(initiative.objective_id);
 
-      const performanceMeasures = initiative.performance_measures.map(measure => {
-        const achievement = existingAchievements.performance.find(
-          (a: any) => a.performance_measure === measure.id
-        );
-        return {
-          id: measure.id,
-          name: measure.name,
-          weight: measure.weight,
-          target: measure.target,
-          achievement: achievement?.achievement || 0,
-          justification: achievement?.justification || ''
-        };
-      });
-
-      const mainActivities = initiative.main_activities.map(activity => {
-        const achievement = existingAchievements.activities.find(
-          (a: any) => a.main_activity === activity.id
-        );
-
-        console.log(`Activity ${activity.id} (${activity.name}):`, {
-          has_sub_activities: !!activity.sub_activities,
-          sub_activities_count: activity.sub_activities?.length || 0,
-          sub_activities: activity.sub_activities
+      // Filter out duplicate measures
+      const performanceMeasures = initiative.performance_measures
+        .filter(measure => {
+          if (processedMeasures.has(measure.id)) {
+            console.warn(`⚠️ ME Report: Skipping duplicate measure ${measure.id}`);
+            return false;
+          }
+          processedMeasures.add(measure.id);
+          return true;
+        })
+        .map(measure => {
+          const achievement = existingAchievements.performance.find(
+            (a: any) => a.performance_measure === measure.id
+          );
+          return {
+            id: measure.id,
+            name: measure.name,
+            weight: measure.weight,
+            target: measure.target,
+            achievement: achievement?.achievement || 0,
+            justification: achievement?.justification || ''
+          };
         });
 
-        const subActivities = activity.sub_activities?.map((subActivity: any) => {
-          const util = budgetUtilizations[subActivity.id];
-          console.log(`Sub-activity ${subActivity.id}:`, {
-            budget: {
-              gov: subActivity.government_treasury,
-              sdg: subActivity.sdg_funding,
-              partners: subActivity.partners_funding,
-              other: subActivity.other_funding
-            },
-            utilization: util,
-            util_found: !!util
+      // Filter out duplicate activities
+      const mainActivities = initiative.main_activities
+        .filter(activity => {
+          if (processedActivities.has(activity.id)) {
+            console.warn(`⚠️ ME Report: Skipping duplicate activity ${activity.id}`);
+            return false;
+          }
+          processedActivities.add(activity.id);
+          return true;
+        })
+        .map(activity => {
+          const achievement = existingAchievements.activities.find(
+            (a: any) => a.main_activity === activity.id
+          );
+
+          console.log(`Activity ${activity.id} (${activity.name}):`, {
+            has_sub_activities: !!activity.sub_activities,
+            sub_activities_count: activity.sub_activities?.length || 0,
+            sub_activities: activity.sub_activities
           });
 
+          const subActivities = activity.sub_activities?.map((subActivity: any) => {
+            const util = budgetUtilizations[subActivity.id];
+            console.log(`Sub-activity ${subActivity.id}:`, {
+              budget: {
+                gov: subActivity.government_treasury,
+                sdg: subActivity.sdg_funding,
+                partners: subActivity.partners_funding,
+                other: subActivity.other_funding
+              },
+              utilization: util,
+              util_found: !!util
+            });
+
+            return {
+              id: subActivity.id,
+              name: subActivity.name,
+              government_treasury: Number(subActivity.government_treasury) || 0,
+              sdg_funding: Number(subActivity.sdg_funding) || 0,
+              partners_funding: Number(subActivity.partners_funding) || 0,
+              other_funding: Number(subActivity.other_funding) || 0,
+              government_treasury_utilized: Number(util?.government_treasury_utilized) || 0,
+              sdg_funding_utilized: Number(util?.sdg_funding_utilized) || 0,
+              partners_funding_utilized: Number(util?.partners_funding_utilized) || 0,
+              other_funding_utilized: Number(util?.other_funding_utilized) || 0,
+            };
+          }) || [];
+
+          console.log(`Final subActivities for ${activity.name}:`, subActivities);
+
           return {
-            id: subActivity.id,
-            name: subActivity.name,
-            government_treasury: Number(subActivity.government_treasury) || 0,
-            sdg_funding: Number(subActivity.sdg_funding) || 0,
-            partners_funding: Number(subActivity.partners_funding) || 0,
-            other_funding: Number(subActivity.other_funding) || 0,
-            government_treasury_utilized: Number(util?.government_treasury_utilized) || 0,
-            sdg_funding_utilized: Number(util?.sdg_funding_utilized) || 0,
-            partners_funding_utilized: Number(util?.partners_funding_utilized) || 0,
-            other_funding_utilized: Number(util?.other_funding_utilized) || 0,
+            id: activity.id,
+            name: activity.name,
+            weight: activity.weight,
+            target: activity.target,
+            achievement: achievement?.achievement || 0,
+            justification: achievement?.justification || '',
+            subActivities
           };
-        }) || [];
-
-        console.log(`Final subActivities for ${activity.name}:`, subActivities);
-
-        return {
-          id: activity.id,
-          name: activity.name,
-          weight: activity.weight,
-          target: activity.target,
-          achievement: achievement?.achievement || 0,
-          justification: achievement?.justification || '',
-          subActivities
-        };
-      });
+        });
 
       objective.initiatives.push({
         id: initiative.initiative_id,
@@ -755,6 +802,8 @@ const Reporting: React.FC = () => {
         mainActivities
       });
     });
+
+    console.log(`✓ ME Report: ${objectivesMap.size} objectives, ${processedInitiatives.size} unique initiatives, ${processedMeasures.size} unique measures, ${processedActivities.size} unique activities`);
 
     return Array.from(objectivesMap.values());
   };
