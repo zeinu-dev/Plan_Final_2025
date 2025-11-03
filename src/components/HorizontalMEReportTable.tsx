@@ -80,7 +80,9 @@ const calculateMeasureAchievement = (measure: PerformanceMeasureData) => {
   const target = Number(measure.target) || 0;
   const weight = Number(measure.weight) || 0;
   const achievementPercent = target > 0 ? (achievement / target) * 100 : 0;
-  const achievementByWeight = (weight * achievementPercent) / 100;
+  // Cap achievement by weight at 100% of planned weight (achievementByWeight cannot exceed weight)
+  const rawAchievementByWeight = (weight * achievementPercent) / 100;
+  const achievementByWeight = Math.min(rawAchievementByWeight, weight);
   return { achievementPercent, achievementByWeight };
 };
 
@@ -89,7 +91,9 @@ const calculateActivityAchievement = (activity: MainActivityData) => {
   const target = Number(activity.target) || 0;
   const weight = Number(activity.weight) || 0;
   const achievementPercent = target > 0 ? (achievement / target) * 100 : 0;
-  const achievementByWeight = (weight * achievementPercent) / 100;
+  // Cap achievement by weight at 100% of planned weight (achievementByWeight cannot exceed weight)
+  const rawAchievementByWeight = (weight * achievementPercent) / 100;
+  const achievementByWeight = Math.min(rawAchievementByWeight, weight);
   return { achievementPercent, achievementByWeight };
 };
 
@@ -441,7 +445,9 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
                               )}
 
                               <td className="border border-gray-300 px-3 py-2 text-sm text-gray-900">
-                                {item.type === 'PM' ? '📊 ' : '📋 '}
+                                <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold mr-2 ${item.type === 'PM' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
+                                  {item.type === 'PM' ? 'PM' : 'MA'}
+                                </span>
                                 {measureOrActivity.name}
                               </td>
                               <td className="border border-gray-300 px-2 py-2 text-center text-sm text-gray-700">
