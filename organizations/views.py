@@ -2373,26 +2373,35 @@ class ReportViewSet(viewsets.ModelViewSet):
             logger.info(f"Found {objectives.count()} selected objectives in plan")
 
             plan_data = []
-            # Track activities to detect duplicates
-            activity_tracking = {}  # activity_id -> list of initiative_ids where it appears
+            # Track seen activities and initiatives to prevent duplicates
+            seen_activities = set()
+            seen_initiatives = set()
 
             for objective in objectives:
                 logger.info(f"Processing objective: {objective.id} - {objective.title}")
 
                 initiatives = objective.initiatives.filter(
                     Q(organization=plan.organization) | Q(organization__isnull=True)
-                )
+                ).distinct()
+
                 logger.info(f"Found {initiatives.count()} initiatives for objective {objective.id}")
 
                 for initiative in initiatives:
+                    # Skip if we've already processed this initiative
+                    if initiative.id in seen_initiatives:
+                        logger.warning(f"Skipping duplicate initiative {initiative.id} - already processed")
+                        continue
+
+                    seen_initiatives.add(initiative.id)
                     logger.info(f"Processing initiative: {initiative.id} - {initiative.name}")
 
                     measures = initiative.performance_measures.filter(
                         Q(organization=plan.organization) | Q(organization__isnull=True)
-                    )
+                    ).distinct()
+
                     activities = initiative.main_activities.filter(
                         Q(organization=plan.organization) | Q(organization__isnull=True)
-                    )
+                    ).distinct()
 
                     logger.info(f"Initiative {initiative.id} has {measures.count()} measures and {activities.count()} activities")
 
@@ -2407,12 +2416,12 @@ class ReportViewSet(viewsets.ModelViewSet):
                         'main_activities': []
                     }
 
+                    # Process measures
                     for measure in measures:
-                        logger.info(f"Processing measure {measure.id}: {measure.name}, target_type: {measure.target_type}, selected_quarters: {measure.selected_quarters}, selected_months: {measure.selected_months}")
                         target = self._get_target_for_period(measure, report_type)
-                        logger.info(f"Calculated target for measure {measure.id}: {target}")
 
                         if target is not None and target > 0:
+                            logger.info(f"Including measure {measure.id}: {measure.name} with target {target} for {report_type}")
                             initiative_data['performance_measures'].append({
                                 'id': measure.id,
                                 'name': measure.name,
@@ -2423,28 +2432,26 @@ class ReportViewSet(viewsets.ModelViewSet):
                         else:
                             logger.warning(f"Skipping measure {measure.id} - no valid target for {report_type}")
 
+                    # Process activities - ensure no duplicates across initiatives
                     for activity in activities:
-                        # Track activity appearances
-                        if activity.id in activity_tracking:
-                            activity_tracking[activity.id].append(initiative.id)
-                            logger.warning(f"⚠️ DUPLICATE: Activity {activity.id} '{activity.name}' appears in multiple initiatives: {activity_tracking[activity.id]}")
-                        else:
-                            activity_tracking[activity.id] = [initiative.id]
+                        # Skip if we've already added this activity
+                        if activity.id in seen_activities:
+                            logger.warning(f"⚠️ DUPLICATE DETECTED: Activity {activity.id} '{activity.name}' already added - skipping")
+                            continue
 
-                        logger.info(f"Processing activity {activity.id}: {activity.name}, initiative: {initiative.id}, target_type: {activity.target_type}, selected_quarters: {activity.selected_quarters}, selected_months: {activity.selected_months}")
-                        logger.info(f"Activity {activity.id} targets - Q1: {activity.q1_target}, Q2: {activity.q2_target}, Q3: {activity.q3_target}, Q4: {activity.q4_target}, Annual: {activity.annual_target}, Baseline: {activity.baseline}")
                         target = self._get_target_for_period(activity, report_type)
-                        logger.info(f"Calculated target for activity {activity.id}: {target} (should NOT be baseline: {activity.baseline})")
 
                         if target is not None and target > 0:
+                            logger.info(f"Including activity {activity.id}: {activity.name} with target {target} for {report_type}")
+
+                            # Mark activity as seen
+                            seen_activities.add(activity.id)
+
                             sub_activities_data = []
                             sub_activities_qs = activity.sub_activities.all()
                             logger.info(f"Activity {activity.id} has {sub_activities_qs.count()} sub-activities")
 
                             for sub_activity in sub_activities_qs:
-                                logger.info(f"Processing sub-activity {sub_activity.id}: {sub_activity.name}")
-                                logger.info(f"Budget values - Treasury: {sub_activity.government_treasury}, SDG: {sub_activity.sdg_funding}, Partners: {sub_activity.partners_funding}, Other: {sub_activity.other_funding}")
-
                                 sub_activities_data.append({
                                     'id': sub_activity.id,
                                     'name': sub_activity.name,
@@ -2454,8 +2461,6 @@ class ReportViewSet(viewsets.ModelViewSet):
                                     'partners_funding': float(sub_activity.partners_funding),
                                     'other_funding': float(sub_activity.other_funding),
                                 })
-
-                            logger.info(f"Total sub_activities_data items: {len(sub_activities_data)}")
 
                             initiative_data['main_activities'].append({
                                 'id': activity.id,
@@ -2468,16 +2473,17 @@ class ReportViewSet(viewsets.ModelViewSet):
                         else:
                             logger.warning(f"Skipping activity {activity.id} - no valid target for {report_type}")
 
+                    # Only add initiative if it has measures or activities for this period
                     if initiative_data['performance_measures'] or initiative_data['main_activities']:
                         plan_data.append(initiative_data)
-                        logger.info(f"Added initiative {initiative.id} to plan_data")
+                        logger.info(f"Added initiative {initiative.id} to plan_data with {len(initiative_data['performance_measures'])} measures and {len(initiative_data['main_activities'])} activities")
                     else:
-                        logger.warning(f"Skipping initiative {initiative.id} - no valid measures or activities")
+                        logger.warning(f"Skipping initiative {initiative.id} - no valid measures or activities for {report_type}")
 
-            logger.info(f"Returning {len(plan_data)} initiative entries for report {pk}")
+            logger.info(f"Returning {len(plan_data)} unique initiative entries for report {pk}")
+            logger.info(f"Total unique activities included: {len(seen_activities)}")
 
-            # Log duplicate activities summary
-            duplicates = {aid: initiatives for aid, initiatives in activity_tracking.items() if len(initiatives) > 1}
+            duplicates = {}
             if duplicates:
                 logger.error(f"❌ FOUND {len(duplicates)} DUPLICATE ACTIVITIES:")
                 for activity_id, initiative_ids in duplicates.items():
@@ -2502,21 +2508,32 @@ class ReportViewSet(viewsets.ModelViewSet):
         objectives = plan.selected_objectives.all()
         me_data = []
 
+        # Track seen items to prevent duplicates
+        seen_initiatives = set()
+        seen_activities = set()
+
         for objective in objectives:
             objective_weight = float(plan.selected_objectives_weights.get(str(objective.id), 0)) if plan.selected_objectives_weights else 0
 
             initiatives_data = []
             initiatives = objective.initiatives.filter(
                 Q(organization=plan.organization) | Q(organization__isnull=True)
-            )
+            ).distinct()
 
             for initiative in initiatives:
+                # Skip duplicate initiatives
+                if initiative.id in seen_initiatives:
+                    logger.warning(f"ME Data: Skipping duplicate initiative {initiative.id}")
+                    continue
+                seen_initiatives.add(initiative.id)
+
                 measures = initiative.performance_measures.filter(
                     Q(organization=plan.organization) | Q(organization__isnull=True)
-                )
+                ).distinct()
+
                 activities = initiative.main_activities.filter(
                     Q(organization=plan.organization) | Q(organization__isnull=True)
-                )
+                ).distinct()
 
                 measures_data = []
                 for measure in measures:
@@ -2534,8 +2551,14 @@ class ReportViewSet(viewsets.ModelViewSet):
 
                 activities_data = []
                 for activity in activities:
+                    # Skip duplicate activities across initiatives
+                    if activity.id in seen_activities:
+                        logger.warning(f"ME Data: Skipping duplicate activity {activity.id}")
+                        continue
+
                     target = self._get_target_for_period(activity, report.report_type)
                     if target and target > 0:
+                        seen_activities.add(activity.id)
                         achievement_record = report.activity_achievements.filter(main_activity=activity).first()
 
                         sub_activities_data = []
