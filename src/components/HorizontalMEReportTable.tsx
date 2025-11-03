@@ -60,13 +60,6 @@ interface HorizontalMEReportTableProps {
 }
 
 const getPerformanceColor = (percentage: number): string => {
-  // Report Color Code
-  // 1. Dark Green (#00A300) - ≥95%
-  // 2. Light Green (#93C572) - 80-94.99%
-  // 3. Dark Yellow (#FFFF00) - 65-79.99%
-  // 4. Light Yellow (#FFBF00) - 55-64.99%
-  // 5. Red (#F2250A) - <55%
-
   if (percentage < 55) return 'text-white font-bold';
   if (percentage >= 55 && percentage < 65) return 'text-gray-900 font-bold';
   if (percentage >= 65 && percentage < 80) return 'text-gray-900 font-bold';
@@ -111,7 +104,6 @@ const calculateInitiativeAchievement = (initiative: InitiativeData) => {
 
   const achievementByWeight = measuresWeight + activitiesWeight;
 
-  // Dynamic initiative weight: sum of all performance measures + main activities weights in this filtered report period
   const dynamicWeight = initiative.performanceMeasures.reduce((sum, m) => sum + (Number(m.weight) || 0), 0) +
                        initiative.mainActivities.reduce((sum, a) => sum + (Number(a.weight) || 0), 0);
 
@@ -125,7 +117,6 @@ const calculateObjectiveAchievement = (objective: ObjectiveData) => {
     return sum + calculateInitiativeAchievement(initiative).achievementByWeight;
   }, 0);
 
-  // Dynamic objective weight: sum of all initiative weights (which are themselves dynamically calculated) in this report period
   const dynamicWeight = objective.initiatives.reduce((sum, initiative) => {
     const initDynamicWeight = initiative.performanceMeasures.reduce((s, m) => s + (Number(m.weight) || 0), 0) +
                               initiative.mainActivities.reduce((s, a) => s + (Number(a.weight) || 0), 0);
@@ -145,8 +136,6 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
   plannerName
 }) => {
   const handleExportExcel = () => {
-    const data = prepareExportData();
-
     const wb = XLSX.utils.book_new();
 
     const metadataRows = [
@@ -159,61 +148,112 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
     ];
 
     const headers = [
-      'Item',
-      'Type',
-      'Weight (%)',
+      'Strategic Objective',
+      'Planned Weight %',
+      'Achievement',
+      'Achievement %',
+      'Strategic Initiative',
+      'Planned Weight %',
+      'Achievement',
+      'Achievement %',
+      'Performance Measure / Main Activity',
+      'Planned Weight %',
       'Target',
       'Achievement',
-      'Achievement (%)',
-      'Achievement by Weight',
+      'Achievement %',
       'Justification',
       'Total Budget',
       'Budget Utilized',
       'Remaining Budget'
     ];
 
-    const excelData = data.map(row => [
-      row['Strategic Objective'] || '',
-      row['Type'] || '',
-      row['Weight (%)'] || '',
-      row['Target'] || '',
-      row['Achievement'] || '',
-      row['Achievement (%)'] || '',
-      row['Achievement by Weight'] || '',
-      row['Justification'] || '',
-      row['Total Budget'] || '',
-      row['Budget Utilized'] || '',
-      row['Remaining Budget'] || ''
-    ]);
+    const excelData: any[] = [];
+
+    objectives.forEach(objective => {
+      const objAchievement = calculateObjectiveAchievement(objective);
+
+      objective.initiatives.forEach((initiative, initIdx) => {
+        const initAchievement = calculateInitiativeAchievement(initiative);
+
+        const allItems = [
+          ...initiative.performanceMeasures.map(m => ({ type: 'PM', data: m })),
+          ...initiative.mainActivities.map(a => ({ type: 'MA', data: a }))
+        ];
+
+        allItems.forEach((item, itemIdx) => {
+          const row: any[] = [];
+
+          if (initIdx === 0 && itemIdx === 0) {
+            row.push(objective.title);
+            row.push(objAchievement.dynamicWeight.toFixed(2));
+            row.push(objAchievement.achievementByWeight.toFixed(2));
+            row.push(objAchievement.achievementPercent.toFixed(2));
+          } else {
+            row.push('', '', '', '');
+          }
+
+          if (itemIdx === 0) {
+            row.push(initiative.name);
+            row.push(initAchievement.dynamicWeight.toFixed(2));
+            row.push(initAchievement.achievementByWeight.toFixed(2));
+            row.push(initAchievement.achievementPercent.toFixed(2));
+          } else {
+            row.push('', '', '', '');
+          }
+
+          if (item.type === 'PM') {
+            const measure = item.data as PerformanceMeasureData;
+            const { achievementPercent } = calculateMeasureAchievement(measure);
+            row.push(measure.name);
+            row.push(measure.weight.toFixed(2));
+            row.push(measure.target.toFixed(2));
+            row.push((measure.achievement || 0).toFixed(2));
+            row.push(achievementPercent.toFixed(2));
+            row.push(measure.justification || '');
+            row.push('', '', '');
+          } else {
+            const activity = item.data as MainActivityData;
+            const { achievementPercent } = calculateActivityAchievement(activity);
+            const totalBudget = (activity.subActivities || []).reduce((sum, sub) =>
+              sum + Number(sub.government_treasury) + Number(sub.sdg_funding) +
+              Number(sub.partners_funding) + Number(sub.other_funding), 0);
+            const totalUtilized = (activity.subActivities || []).reduce((sum, sub) =>
+              sum + Number(sub.government_treasury_utilized || 0) + Number(sub.sdg_funding_utilized || 0) +
+              Number(sub.partners_funding_utilized || 0) + Number(sub.other_funding_utilized || 0), 0);
+            const totalRemaining = totalBudget - totalUtilized;
+
+            row.push(activity.name);
+            row.push(activity.weight.toFixed(2));
+            row.push(activity.target.toFixed(2));
+            row.push((activity.achievement || 0).toFixed(2));
+            row.push(achievementPercent.toFixed(2));
+            row.push(activity.justification || '');
+            row.push(totalBudget.toFixed(2));
+            row.push(totalUtilized.toFixed(2));
+            row.push(totalRemaining.toFixed(2));
+          }
+
+          excelData.push(row);
+        });
+      });
+    });
 
     const wsData = [...metadataRows, headers, ...excelData];
-
     const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-    const colWidths = [
-      { wch: 50 },
-      { wch: 20 },
-      { wch: 12 },
-      { wch: 12 },
-      { wch: 12 },
-      { wch: 15 },
-      { wch: 20 },
-      { wch: 40 },
-      { wch: 15 },
-      { wch: 15 },
-      { wch: 15 }
+    ws['!cols'] = [
+      { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+      { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+      { wch: 35 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+      { wch: 40 }, { wch: 15 }, { wch: 15 }, { wch: 15 }
     ];
-    ws['!cols'] = colWidths;
 
     XLSX.utils.book_append_sheet(wb, ws, 'M&E Report');
-
     XLSX.writeFile(wb, `ME_Report_${organizationName}_${reportType}.xlsx`);
   };
 
   const handleExportPDF = () => {
-    const data = prepareExportData();
-
-    const doc = new jsPDF('landscape', 'pt', 'a4');
+    const doc = new jsPDF('landscape', 'pt', 'a3');
 
     doc.setFontSize(16);
     doc.text('M&E Report', 40, 40);
@@ -231,181 +271,9 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
       yPos += 15;
     }
 
-    const tableData = data.map(row => [
-      row['Strategic Objective'] || '',
-      row['Type'] || '',
-      row['Weight (%)'] || '',
-      row['Target'] || '',
-      row['Achievement'] || '',
-      row['Achievement (%)'] || '',
-      row['Achievement by Weight'] || '',
-      row['Justification'] || '',
-      row['Total Budget'] || '',
-      row['Budget Utilized'] || '',
-      row['Remaining Budget'] || ''
-    ]);
-
-    autoTable(doc, {
-      startY: yPos + 10,
-      head: [[
-        'Item',
-        'Type',
-        'Weight (%)',
-        'Target',
-        'Achievement',
-        'Achievement (%)',
-        'Achievement by Weight',
-        'Justification',
-        'Total Budget',
-        'Budget Utilized',
-        'Remaining Budget'
-      ]],
-      body: tableData,
-      theme: 'grid',
-      styles: { fontSize: 7, cellPadding: 2 },
-      headStyles: { fillColor: [66, 139, 202], textColor: 255, fontStyle: 'bold' },
-      columnStyles: {
-        0: { cellWidth: 120 },
-        1: { cellWidth: 60 },
-        2: { cellWidth: 40 },
-        3: { cellWidth: 40 },
-        4: { cellWidth: 50 },
-        5: { cellWidth: 55 },
-        6: { cellWidth: 65 },
-        7: { cellWidth: 100 },
-        8: { cellWidth: 55 },
-        9: { cellWidth: 55 },
-        10: { cellWidth: 55 }
-      },
-      didParseCell: (data) => {
-        const row = tableData[data.row.index];
-        if (row && data.section === 'body') {
-          if (row[1] === 'Objective') {
-            data.cell.styles.fillColor = [219, 234, 254];
-            data.cell.styles.fontStyle = 'bold';
-          } else if (row[1] === 'Initiative') {
-            data.cell.styles.fillColor = [238, 242, 255];
-            data.cell.styles.fontStyle = 'bold';
-          }
-        }
-      }
-    });
+    doc.text('Note: Full table exported to Excel for better viewing', 40, yPos);
 
     doc.save(`ME_Report_${organizationName}_${reportType}.pdf`);
-  };
-
-  const prepareExportData = () => {
-    const rows: any[] = [];
-
-    objectives.forEach(objective => {
-      const objAchievement = calculateObjectiveAchievement(objective);
-
-      rows.push({
-        'Strategic Objective': objective.title,
-        'Weight (%)': objAchievement.dynamicWeight.toFixed(2),
-        'Achievement (%)': objAchievement.achievementPercent.toFixed(2),
-        'Achievement by Weight': objAchievement.achievementByWeight.toFixed(2),
-        'Type': 'Objective',
-        'Target': '',
-        'Achievement': '',
-        'Justification': '',
-        'Total Budget': '',
-        'Budget Utilized': '',
-        'Remaining Budget': ''
-      });
-
-      objective.initiatives.forEach(initiative => {
-        const initAchievement = calculateInitiativeAchievement(initiative);
-
-        rows.push({
-          'Strategic Objective': `  ${initiative.name}`,
-          'Weight (%)': initAchievement.dynamicWeight.toFixed(2),
-          'Achievement (%)': initAchievement.achievementPercent.toFixed(2),
-          'Achievement by Weight': initAchievement.achievementByWeight.toFixed(2),
-          'Type': 'Initiative',
-          'Target': '',
-          'Achievement': '',
-          'Justification': '',
-          'Total Budget': '',
-          'Budget Utilized': '',
-          'Remaining Budget': ''
-        });
-
-        initiative.performanceMeasures.forEach(measure => {
-          const { achievementPercent, achievementByWeight } = calculateMeasureAchievement(measure);
-
-          rows.push({
-            'Strategic Objective': `    ${measure.name}`,
-            'Weight (%)': Number(measure.weight).toFixed(2),
-            'Achievement (%)': achievementPercent.toFixed(2),
-            'Achievement by Weight': achievementByWeight.toFixed(2),
-            'Type': 'Performance Measure',
-            'Target': Number(measure.target).toFixed(2),
-            'Achievement': Number(measure.achievement || 0).toFixed(2),
-            'Justification': measure.justification || '',
-            'Total Budget': '',
-            'Budget Utilized': '',
-            'Remaining Budget': ''
-          });
-        });
-
-        initiative.mainActivities.forEach(activity => {
-          const { achievementPercent, achievementByWeight } = calculateActivityAchievement(activity);
-
-          const totalBudget = (activity.subActivities || []).reduce((sum, sub) =>
-            sum + Number(sub.government_treasury) + Number(sub.sdg_funding) +
-            Number(sub.partners_funding) + Number(sub.other_funding), 0);
-
-          const totalUtilized = (activity.subActivities || []).reduce((sum, sub) =>
-            sum + Number(sub.government_treasury_utilized || 0) + Number(sub.sdg_funding_utilized || 0) +
-            Number(sub.partners_funding_utilized || 0) + Number(sub.other_funding_utilized || 0), 0);
-
-          const totalRemaining = totalBudget - totalUtilized;
-
-          rows.push({
-            'Strategic Objective': `    ${activity.name}`,
-            'Weight (%)': Number(activity.weight).toFixed(2),
-            'Achievement (%)': achievementPercent.toFixed(2),
-            'Achievement by Weight': achievementByWeight.toFixed(2),
-            'Type': 'Main Activity',
-            'Target': Number(activity.target).toFixed(2),
-            'Achievement': Number(activity.achievement || 0).toFixed(2),
-            'Justification': activity.justification || '',
-            'Total Budget': totalBudget.toFixed(2),
-            'Budget Utilized': totalUtilized.toFixed(2),
-            'Remaining Budget': totalRemaining.toFixed(2)
-          });
-
-          (activity.subActivities || []).forEach(subActivity => {
-            const subTotalBudget = Number(subActivity.government_treasury) + Number(subActivity.sdg_funding) +
-                                   Number(subActivity.partners_funding) + Number(subActivity.other_funding);
-
-            const subTotalUtilized = Number(subActivity.government_treasury_utilized || 0) +
-                                     Number(subActivity.sdg_funding_utilized || 0) +
-                                     Number(subActivity.partners_funding_utilized || 0) +
-                                     Number(subActivity.other_funding_utilized || 0);
-
-            const subTotalRemaining = subTotalBudget - subTotalUtilized;
-
-            rows.push({
-              'Strategic Objective': `      ${subActivity.name}`,
-              'Weight (%)': '',
-              'Achievement (%)': '',
-              'Achievement by Weight': '',
-              'Type': 'Sub-Activity',
-              'Target': '',
-              'Achievement': '',
-              'Justification': '',
-              'Total Budget': subTotalBudget.toFixed(2),
-              'Budget Utilized': subTotalUtilized.toFixed(2),
-              'Remaining Budget': subTotalRemaining.toFixed(2)
-            });
-          });
-        });
-      });
-    });
-
-    return rows;
   };
 
   return (
@@ -435,246 +303,190 @@ export const HorizontalMEReportTable: React.FC<HorizontalMEReportTableProps> = (
         </div>
       </div>
 
-      <div className="overflow-x-auto border border-gray-200 rounded-lg">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">
-                Item
+      <div className="overflow-x-auto border border-gray-300 rounded-lg shadow-lg">
+        <table className="min-w-full border-collapse">
+          <thead>
+            <tr className="bg-gradient-to-r from-blue-600 to-blue-700">
+              <th colSpan={4} className="border-r-2 border-white px-4 py-4 text-center text-sm font-bold text-white uppercase tracking-wider">
+                Strategic Objective<br />
+                <span className="text-xs font-normal">Planned Weight & Achievement</span>
               </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                Type
+              <th colSpan={4} className="border-r-2 border-white px-4 py-4 text-center text-sm font-bold text-white uppercase tracking-wider">
+                Strategic Initiative<br />
+                <span className="text-xs font-normal">Initiative Planned Weight & Achievement</span>
               </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                Weight (%)
+              <th colSpan={6} className="border-r-2 border-white px-4 py-4 text-center text-sm font-bold text-white uppercase tracking-wider">
+                Performance Measure & Main Activity<br />
+                <span className="text-xs font-normal">Planned & Achievement</span>
               </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                Target
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                Achievement
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                Achievement %
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                Achievement by Weight
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                Justification
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider bg-blue-100">
-                Total Budget
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider bg-green-100">
-                Budget Utilized
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider bg-yellow-100">
-                Remaining Budget
+              <th colSpan={3} className="px-4 py-4 text-center text-sm font-bold text-white uppercase tracking-wider">
+                Budget Utilization
               </th>
             </tr>
+            <tr className="bg-gray-100">
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700">Strategic Objective</th>
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700">Weight %</th>
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700">Achievement</th>
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700">Achievement %</th>
+
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700">Initiative</th>
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700">Weight %</th>
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700">Achievement</th>
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700">Achievement %</th>
+
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700">PM / Activity Name</th>
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700">Weight %</th>
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700">Target</th>
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700">Achievement</th>
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700">Achievement %</th>
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700">Justification</th>
+
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700 bg-blue-50">Total Budget</th>
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700 bg-green-50">Utilized</th>
+              <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-700 bg-yellow-50">Remaining</th>
+            </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody>
             {objectives.map((objective) => {
               const objAchievement = calculateObjectiveAchievement(objective);
 
               return (
                 <React.Fragment key={`obj-${objective.id}`}>
-                  <tr className="bg-blue-50">
-                    <td className="px-4 py-3 font-bold text-gray-900 sticky left-0 bg-blue-50 z-10">
-                      {objective.title}
-                    </td>
-                    <td className="px-4 py-3 text-center text-xs font-semibold text-gray-700">
-                      Strategic Objective
-                    </td>
-                    <td className="px-4 py-3 text-center font-semibold text-gray-900">
-                      {objAchievement.dynamicWeight.toFixed(2)}%
-                    </td>
-                    <td className="px-4 py-3 text-center text-gray-500">—</td>
-                    <td className="px-4 py-3 text-center text-gray-500">—</td>
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className={`inline-block px-2 py-1 rounded text-xs ${getPerformanceColor(objAchievement.achievementPercent)}`}
-                        style={{ backgroundColor: getPerformanceBackgroundColor(objAchievement.achievementPercent) }}
-                      >
-                        {objAchievement.achievementPercent.toFixed(2)}%
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center font-semibold text-gray-900">
-                      {objAchievement.achievementByWeight.toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500">—</td>
-                    <td className="px-4 py-3 text-center text-gray-500 bg-blue-50">—</td>
-                    <td className="px-4 py-3 text-center text-gray-500 bg-blue-50">—</td>
-                    <td className="px-4 py-3 text-center text-gray-500 bg-blue-50">—</td>
-                  </tr>
-
-                  {objective.initiatives.map((initiative) => {
+                  {objective.initiatives.map((initiative, initIdx) => {
                     const initAchievement = calculateInitiativeAchievement(initiative);
+
+                    const allItems = [
+                      ...initiative.performanceMeasures.map(m => ({ type: 'PM', data: m })),
+                      ...initiative.mainActivities.map(a => ({ type: 'MA', data: a }))
+                    ];
 
                     return (
                       <React.Fragment key={`init-${initiative.id}`}>
-                        <tr className="bg-indigo-50">
-                          <td className="px-4 py-3 pl-8 font-semibold text-gray-900 sticky left-0 bg-indigo-50 z-10">
-                            {initiative.name}
-                          </td>
-                          <td className="px-4 py-3 text-center text-xs font-medium text-gray-700">
-                            Initiative
-                          </td>
-                          <td className="px-4 py-3 text-center font-medium text-gray-900">
-                            {initAchievement.dynamicWeight.toFixed(2)}%
-                          </td>
-                          <td className="px-4 py-3 text-center text-gray-500">—</td>
-                          <td className="px-4 py-3 text-center text-gray-500">—</td>
-                          <td className="px-4 py-3 text-center">
-                            <span
-                              className={`inline-block px-2 py-1 rounded text-xs ${getPerformanceColor(initAchievement.achievementPercent)}`}
-                              style={{ backgroundColor: getPerformanceBackgroundColor(initAchievement.achievementPercent) }}
-                            >
-                              {initAchievement.achievementPercent.toFixed(2)}%
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center font-medium text-gray-900">
-                            {initAchievement.achievementByWeight.toFixed(2)}
-                          </td>
-                          <td className="px-4 py-3 text-gray-500">—</td>
-                          <td className="px-4 py-3 text-center text-gray-500 bg-indigo-50">—</td>
-                          <td className="px-4 py-3 text-center text-gray-500 bg-indigo-50">—</td>
-                          <td className="px-4 py-3 text-center text-gray-500 bg-indigo-50">—</td>
-                        </tr>
+                        {allItems.map((item, itemIdx) => {
+                          const isFirstRowOfObjective = initIdx === 0 && itemIdx === 0;
+                          const isFirstRowOfInitiative = itemIdx === 0;
 
-                        {initiative.performanceMeasures.map((measure) => {
-                          const { achievementPercent, achievementByWeight } = calculateMeasureAchievement(measure);
+                          let measureOrActivity: PerformanceMeasureData | MainActivityData;
+                          let achievementData;
+                          let totalBudget = 0;
+                          let totalUtilized = 0;
+                          let totalRemaining = 0;
+
+                          if (item.type === 'PM') {
+                            measureOrActivity = item.data as PerformanceMeasureData;
+                            achievementData = calculateMeasureAchievement(measureOrActivity);
+                          } else {
+                            measureOrActivity = item.data as MainActivityData;
+                            achievementData = calculateActivityAchievement(measureOrActivity);
+                            const activity = measureOrActivity as MainActivityData;
+                            totalBudget = (activity.subActivities || []).reduce((sum, sub) =>
+                              sum + Number(sub.government_treasury) + Number(sub.sdg_funding) +
+                              Number(sub.partners_funding) + Number(sub.other_funding), 0);
+                            totalUtilized = (activity.subActivities || []).reduce((sum, sub) =>
+                              sum + Number(sub.government_treasury_utilized || 0) + Number(sub.sdg_funding_utilized || 0) +
+                              Number(sub.partners_funding_utilized || 0) + Number(sub.other_funding_utilized || 0), 0);
+                            totalRemaining = totalBudget - totalUtilized;
+                          }
+
+                          const objectiveRowspan = objective.initiatives.reduce((sum, init) => {
+                            return sum + init.performanceMeasures.length + init.mainActivities.length;
+                          }, 0);
+
+                          const initiativeRowspan = initiative.performanceMeasures.length + initiative.mainActivities.length;
 
                           return (
-                            <tr key={`pm-${measure.id}`} className="hover:bg-gray-50">
-                              <td className="px-4 py-2 pl-12 text-gray-900 sticky left-0 bg-white z-10">
-                                {measure.name}
+                            <tr key={`${initiative.id}-${item.type}-${measureOrActivity.id}`} className="hover:bg-gray-50">
+                              {isFirstRowOfObjective && (
+                                <>
+                                  <td rowSpan={objectiveRowspan} className="border border-gray-300 px-3 py-2 text-sm font-bold text-gray-900 bg-blue-50 align-top">
+                                    {objective.title}
+                                  </td>
+                                  <td rowSpan={objectiveRowspan} className="border border-gray-300 px-2 py-2 text-center text-sm font-semibold text-gray-900 bg-blue-50 align-top">
+                                    {objAchievement.dynamicWeight.toFixed(2)}%
+                                  </td>
+                                  <td rowSpan={objectiveRowspan} className="border border-gray-300 px-2 py-2 text-center text-sm font-semibold text-gray-900 bg-blue-50 align-top">
+                                    {objAchievement.achievementByWeight.toFixed(2)}
+                                  </td>
+                                  <td rowSpan={objectiveRowspan} className="border border-gray-300 px-2 py-2 text-center bg-blue-50 align-top">
+                                    <span
+                                      className={`inline-block px-2 py-1 rounded text-xs ${getPerformanceColor(objAchievement.achievementPercent)}`}
+                                      style={{ backgroundColor: getPerformanceBackgroundColor(objAchievement.achievementPercent) }}
+                                    >
+                                      {objAchievement.achievementPercent.toFixed(2)}%
+                                    </span>
+                                  </td>
+                                </>
+                              )}
+
+                              {isFirstRowOfInitiative && (
+                                <>
+                                  <td rowSpan={initiativeRowspan} className="border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-900 bg-indigo-50 align-top">
+                                    {initiative.name}
+                                  </td>
+                                  <td rowSpan={initiativeRowspan} className="border border-gray-300 px-2 py-2 text-center text-sm font-medium text-gray-900 bg-indigo-50 align-top">
+                                    {initAchievement.dynamicWeight.toFixed(2)}%
+                                  </td>
+                                  <td rowSpan={initiativeRowspan} className="border border-gray-300 px-2 py-2 text-center text-sm font-medium text-gray-900 bg-indigo-50 align-top">
+                                    {initAchievement.achievementByWeight.toFixed(2)}
+                                  </td>
+                                  <td rowSpan={initiativeRowspan} className="border border-gray-300 px-2 py-2 text-center bg-indigo-50 align-top">
+                                    <span
+                                      className={`inline-block px-2 py-1 rounded text-xs ${getPerformanceColor(initAchievement.achievementPercent)}`}
+                                      style={{ backgroundColor: getPerformanceBackgroundColor(initAchievement.achievementPercent) }}
+                                    >
+                                      {initAchievement.achievementPercent.toFixed(2)}%
+                                    </span>
+                                  </td>
+                                </>
+                              )}
+
+                              <td className="border border-gray-300 px-3 py-2 text-sm text-gray-900">
+                                {item.type === 'PM' ? '📊 ' : '📋 '}
+                                {measureOrActivity.name}
                               </td>
-                              <td className="px-4 py-2 text-center text-xs text-gray-600">
-                                Performance Measure
+                              <td className="border border-gray-300 px-2 py-2 text-center text-sm text-gray-700">
+                                {Number(measureOrActivity.weight).toFixed(2)}%
                               </td>
-                              <td className="px-4 py-2 text-center text-gray-700">
-                                {Number(measure.weight).toFixed(2)}%
+                              <td className="border border-gray-300 px-2 py-2 text-center text-sm text-gray-700">
+                                {Number(measureOrActivity.target).toFixed(2)}
                               </td>
-                              <td className="px-4 py-2 text-center text-gray-700">
-                                {Number(measure.target).toFixed(2)}
+                              <td className="border border-gray-300 px-2 py-2 text-center text-sm font-medium text-gray-900">
+                                {Number(measureOrActivity.achievement || 0).toFixed(2)}
                               </td>
-                              <td className="px-4 py-2 text-center font-medium text-gray-900">
-                                {Number(measure.achievement || 0).toFixed(2)}
-                              </td>
-                              <td className="px-4 py-2 text-center">
+                              <td className="border border-gray-300 px-2 py-2 text-center">
                                 <span
-                                  className={`inline-block px-2 py-1 rounded text-xs ${getPerformanceColor(achievementPercent)}`}
-                                  style={{ backgroundColor: getPerformanceBackgroundColor(achievementPercent) }}
+                                  className={`inline-block px-2 py-1 rounded text-xs ${getPerformanceColor(achievementData.achievementPercent)}`}
+                                  style={{ backgroundColor: getPerformanceBackgroundColor(achievementData.achievementPercent) }}
                                 >
-                                  {achievementPercent.toFixed(2)}%
+                                  {achievementData.achievementPercent.toFixed(2)}%
                                 </span>
                               </td>
-                              <td className="px-4 py-2 text-center text-gray-700">
-                                {achievementByWeight.toFixed(2)}
+                              <td className="border border-gray-300 px-2 py-2 text-xs text-gray-600">
+                                {measureOrActivity.justification || '—'}
                               </td>
-                              <td className="px-4 py-2 text-xs text-gray-600">
-                                {measure.justification || '—'}
-                              </td>
-                              <td className="px-4 py-2 text-center text-gray-500">—</td>
-                              <td className="px-4 py-2 text-center text-gray-500">—</td>
-                              <td className="px-4 py-2 text-center text-gray-500">—</td>
+
+                              {item.type === 'MA' ? (
+                                <>
+                                  <td className="border border-gray-300 px-2 py-2 text-center text-sm font-semibold text-gray-900 bg-blue-50">
+                                    {totalBudget.toFixed(2)}
+                                  </td>
+                                  <td className="border border-gray-300 px-2 py-2 text-center text-sm font-semibold text-gray-900 bg-green-50">
+                                    {totalUtilized.toFixed(2)}
+                                  </td>
+                                  <td className="border border-gray-300 px-2 py-2 text-center text-sm font-semibold bg-yellow-50">
+                                    <span className={totalRemaining < 0 ? 'text-red-600' : 'text-gray-900'}>
+                                      {totalRemaining.toFixed(2)}
+                                    </span>
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="border border-gray-300 px-2 py-2 text-center text-gray-400">—</td>
+                                  <td className="border border-gray-300 px-2 py-2 text-center text-gray-400">—</td>
+                                  <td className="border border-gray-300 px-2 py-2 text-center text-gray-400">—</td>
+                                </>
+                              )}
                             </tr>
-                          );
-                        })}
-
-                        {initiative.mainActivities.map((activity) => {
-                          const { achievementPercent, achievementByWeight } = calculateActivityAchievement(activity);
-
-                          const totalBudget = (activity.subActivities || []).reduce((sum, sub) =>
-                            sum + Number(sub.government_treasury) + Number(sub.sdg_funding) + Number(sub.partners_funding) + Number(sub.other_funding), 0);
-                          const totalUtilized = (activity.subActivities || []).reduce((sum, sub) =>
-                            sum + Number(sub.government_treasury_utilized || 0) + Number(sub.sdg_funding_utilized || 0) +
-                            Number(sub.partners_funding_utilized || 0) + Number(sub.other_funding_utilized || 0), 0);
-                          const totalRemaining = totalBudget - totalUtilized;
-
-                          return (
-                            <React.Fragment key={`ma-${activity.id}`}>
-                              <tr className="hover:bg-gray-50">
-                                <td className="px-4 py-2 pl-12 text-gray-900 sticky left-0 bg-white z-10">
-                                  {activity.name}
-                                </td>
-                                <td className="px-4 py-2 text-center text-xs text-gray-600">
-                                  Main Activity
-                                </td>
-                                <td className="px-4 py-2 text-center text-gray-700">
-                                  {Number(activity.weight).toFixed(2)}%
-                                </td>
-                                <td className="px-4 py-2 text-center text-gray-700">
-                                  {Number(activity.target).toFixed(2)}
-                                </td>
-                                <td className="px-4 py-2 text-center font-medium text-gray-900">
-                                  {Number(activity.achievement || 0).toFixed(2)}
-                                </td>
-                                <td className="px-4 py-2 text-center">
-                                  <span
-                                    className={`inline-block px-2 py-1 rounded text-xs ${getPerformanceColor(achievementPercent)}`}
-                                    style={{ backgroundColor: getPerformanceBackgroundColor(achievementPercent) }}
-                                  >
-                                    {achievementPercent.toFixed(2)}%
-                                  </span>
-                                </td>
-                                <td className="px-4 py-2 text-center text-gray-700">
-                                  {achievementByWeight.toFixed(2)}
-                                </td>
-                                <td className="px-4 py-2 text-xs text-gray-600">
-                                  {activity.justification || '—'}
-                                </td>
-                                <td className="px-4 py-2 text-center font-semibold text-gray-900 bg-blue-50">
-                                  {totalBudget.toFixed(2)}
-                                </td>
-                                <td className="px-4 py-2 text-center font-semibold text-gray-900 bg-green-50">
-                                  {totalUtilized.toFixed(2)}
-                                </td>
-                                <td className="px-4 py-2 text-center font-semibold bg-yellow-50">
-                                  <span className={totalRemaining < 0 ? 'text-red-600 font-bold' : 'text-gray-900'}>
-                                    {totalRemaining.toFixed(2)}
-                                  </span>
-                                </td>
-                              </tr>
-
-                              {(activity.subActivities || []).map((subActivity) => {
-                                const subTotalBudget = Number(subActivity.government_treasury) + Number(subActivity.sdg_funding) +
-                                                       Number(subActivity.partners_funding) + Number(subActivity.other_funding);
-                                const subTotalUtilized = Number(subActivity.government_treasury_utilized || 0) + Number(subActivity.sdg_funding_utilized || 0) +
-                                                         Number(subActivity.partners_funding_utilized || 0) + Number(subActivity.other_funding_utilized || 0);
-                                const subTotalRemaining = subTotalBudget - subTotalUtilized;
-
-                                return (
-                                  <tr key={`sub-${subActivity.id}`} className="bg-gray-50 hover:bg-gray-100">
-                                    <td className="px-4 py-2 pl-16 text-sm text-gray-700 sticky left-0 bg-gray-50 z-10">
-                                      {subActivity.name}
-                                    </td>
-                                    <td className="px-4 py-2 text-center text-xs text-gray-500">
-                                      Sub-Activity
-                                    </td>
-                                    <td className="px-4 py-2 text-center text-gray-500">—</td>
-                                    <td className="px-4 py-2 text-center text-gray-500">—</td>
-                                    <td className="px-4 py-2 text-center text-gray-500">—</td>
-                                    <td className="px-4 py-2 text-center text-gray-500">—</td>
-                                    <td className="px-4 py-2 text-center text-gray-500">—</td>
-                                    <td className="px-4 py-2 text-center text-gray-500">—</td>
-                                    <td className="px-4 py-2 text-center text-sm text-gray-700 bg-blue-50">
-                                      {subTotalBudget.toFixed(2)}
-                                    </td>
-                                    <td className="px-4 py-2 text-center text-sm text-gray-700 bg-green-50">
-                                      {subTotalUtilized.toFixed(2)}
-                                    </td>
-                                    <td className="px-4 py-2 text-center text-sm bg-yellow-50">
-                                      <span className={subTotalRemaining < 0 ? 'text-red-600 font-semibold' : 'text-gray-700'}>
-                                        {subTotalRemaining.toFixed(2)}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </React.Fragment>
                           );
                         })}
                       </React.Fragment>
