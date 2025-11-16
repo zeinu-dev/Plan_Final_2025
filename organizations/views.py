@@ -2372,12 +2372,22 @@ class ReportViewSet(viewsets.ModelViewSet):
             objectives = plan.selected_objectives.all()
             logger.info(f"Found {objectives.count()} selected objectives in plan")
 
-            plan_data = []
-            # Track seen activities and initiatives to prevent duplicates
-            seen_activities = set()
+            # NEW STRUCTURE: Proper hierarchy
+            objectives_data = []
+
+            # Track globally to prevent duplicates
+            seen_objectives = set()
             seen_initiatives = set()
+            seen_measures = set()
+            seen_activities = set()
 
             for objective in objectives:
+                # Skip duplicate objectives
+                if objective.id in seen_objectives:
+                    logger.warning(f"Skipping duplicate objective {objective.id}")
+                    continue
+                seen_objectives.add(objective.id)
+
                 logger.info(f"Processing objective: {objective.id} - {objective.title}")
 
                 initiatives = objective.initiatives.filter(
@@ -2386,13 +2396,15 @@ class ReportViewSet(viewsets.ModelViewSet):
 
                 logger.info(f"Found {initiatives.count()} initiatives for objective {objective.id}")
 
+                initiatives_data = []
+
                 for initiative in initiatives:
                     # Skip if we've already processed this initiative
                     if initiative.id in seen_initiatives:
                         logger.warning(f"Skipping duplicate initiative {initiative.id} - already processed")
                         continue
-
                     seen_initiatives.add(initiative.id)
+
                     logger.info(f"Processing initiative: {initiative.id} - {initiative.name}")
 
                     measures = initiative.performance_measures.filter(
@@ -2405,24 +2417,21 @@ class ReportViewSet(viewsets.ModelViewSet):
 
                     logger.info(f"Initiative {initiative.id} has {measures.count()} measures and {activities.count()} activities")
 
-                    initiative_data = {
-                        'objective_id': objective.id,
-                        'objective_title': objective.title,
-                        'objective_weight': float(plan.selected_objectives_weights.get(str(objective.id), 0)) if plan.selected_objectives_weights else 0,
-                        'initiative_id': initiative.id,
-                        'initiative_name': initiative.name,
-                        'initiative_weight': float(initiative.weight or 0),
-                        'performance_measures': [],
-                        'main_activities': []
-                    }
+                    performance_measures_data = []
+                    main_activities_data = []
 
-                    # Process measures
+                    # Process measures - prevent duplicates
                     for measure in measures:
+                        if measure.id in seen_measures:
+                            logger.warning(f"Skipping duplicate measure {measure.id}")
+                            continue
+
                         target = self._get_target_for_period(measure, report_type)
 
                         if target is not None and target > 0:
+                            seen_measures.add(measure.id)
                             logger.info(f"Including measure {measure.id}: {measure.name} with target {target} for {report_type}")
-                            initiative_data['performance_measures'].append({
+                            performance_measures_data.append({
                                 'id': measure.id,
                                 'name': measure.name,
                                 'weight': float(measure.weight or 0),
@@ -2432,20 +2441,17 @@ class ReportViewSet(viewsets.ModelViewSet):
                         else:
                             logger.warning(f"Skipping measure {measure.id} - no valid target for {report_type}")
 
-                    # Process activities - ensure no duplicates across initiatives
+                    # Process activities - prevent duplicates
                     for activity in activities:
-                        # Skip if we've already added this activity
                         if activity.id in seen_activities:
-                            logger.warning(f"⚠️ DUPLICATE DETECTED: Activity {activity.id} '{activity.name}' already added - skipping")
+                            logger.warning(f"⚠️ DUPLICATE: Activity {activity.id} '{activity.name}' already added - skipping")
                             continue
 
                         target = self._get_target_for_period(activity, report_type)
 
                         if target is not None and target > 0:
-                            logger.info(f"Including activity {activity.id}: {activity.name} with target {target} for {report_type}")
-
-                            # Mark activity as seen
                             seen_activities.add(activity.id)
+                            logger.info(f"Including activity {activity.id}: {activity.name} with target {target} for {report_type}")
 
                             sub_activities_data = []
                             sub_activities_qs = activity.sub_activities.all()
@@ -2462,7 +2468,7 @@ class ReportViewSet(viewsets.ModelViewSet):
                                     'other_funding': float(sub_activity.other_funding),
                                 })
 
-                            initiative_data['main_activities'].append({
+                            main_activities_data.append({
                                 'id': activity.id,
                                 'name': activity.name,
                                 'weight': float(activity.weight or 0),
@@ -2474,27 +2480,36 @@ class ReportViewSet(viewsets.ModelViewSet):
                             logger.warning(f"Skipping activity {activity.id} - no valid target for {report_type}")
 
                     # Only add initiative if it has measures or activities for this period
-                    if initiative_data['performance_measures'] or initiative_data['main_activities']:
-                        plan_data.append(initiative_data)
-                        logger.info(f"Added initiative {initiative.id} to plan_data with {len(initiative_data['performance_measures'])} measures and {len(initiative_data['main_activities'])} activities")
+                    if performance_measures_data or main_activities_data:
+                        initiatives_data.append({
+                            'id': initiative.id,
+                            'name': initiative.name,
+                            'weight': float(initiative.weight or 0),
+                            'performance_measures': performance_measures_data,
+                            'main_activities': main_activities_data
+                        })
+                        logger.info(f"Added initiative {initiative.id} with {len(performance_measures_data)} measures and {len(main_activities_data)} activities")
                     else:
                         logger.warning(f"Skipping initiative {initiative.id} - no valid measures or activities for {report_type}")
 
-            logger.info(f"Returning {len(plan_data)} unique initiative entries for report {pk}")
-            logger.info(f"Total unique activities included: {len(seen_activities)}")
+                # Only add objective if it has initiatives with data
+                if initiatives_data:
+                    objectives_data.append({
+                        'id': objective.id,
+                        'title': objective.title,
+                        'weight': float(plan.selected_objectives_weights.get(str(objective.id), 0)) if plan.selected_objectives_weights else 0,
+                        'initiatives': initiatives_data
+                    })
+                    logger.info(f"Added objective {objective.id} with {len(initiatives_data)} initiatives")
+                else:
+                    logger.warning(f"Skipping objective {objective.id} - no valid initiatives")
 
-            duplicates = {}
-            if duplicates:
-                logger.error(f"❌ FOUND {len(duplicates)} DUPLICATE ACTIVITIES:")
-                for activity_id, initiative_ids in duplicates.items():
-                    logger.error(f"  Activity ID {activity_id} appears in initiatives: {initiative_ids}")
-            else:
-                logger.info("✓ No duplicate activities found")
+            logger.info(f"Returning hierarchical data: {len(objectives_data)} objectives, {len(seen_initiatives)} initiatives, {len(seen_measures)} measures, {len(seen_activities)} activities")
 
             me_data = self._build_me_data(report)
 
             return Response({
-                'plan_data': plan_data,
+                'objectives': objectives_data,
                 'me_data': me_data
             }, status=status.HTTP_200_OK)
 

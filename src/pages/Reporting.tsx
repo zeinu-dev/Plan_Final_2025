@@ -7,86 +7,7 @@ import { REPORT_TYPES, Report, ReportPlanData, PerformanceAchievement, ActivityA
 import { HorizontalMEReportTable } from '../components/HorizontalMEReportTable';
 import { BudgetUtilizationForm } from '../components/BudgetUtilizationForm';
 
-// Helper function to group flat plan data by objective and initiative
-const groupPlanData = (flatData: ReportPlanData[]) => {
-  const objectivesMap = new Map<number, {
-    id: number;
-    title: string;
-    weight: number;
-    initiatives: Array<{
-      id: number;
-      name: string;
-      weight: number;
-      performance_measures: any[];
-      main_activities: any[];
-    }>;
-  }>();
-
-  // Track globally to prevent duplicates across initiatives
-  const globalMeasureIds = new Set<number>();
-  const globalActivityIds = new Set<number>();
-  const processedInitiatives = new Set<number>();
-
-  flatData.forEach((item) => {
-    // Get or create objective
-    if (!objectivesMap.has(item.objective_id)) {
-      objectivesMap.set(item.objective_id, {
-        id: item.objective_id,
-        title: item.objective_title,
-        weight: item.objective_weight,
-        initiatives: []
-      });
-    }
-
-    const objective = objectivesMap.get(item.objective_id)!;
-
-    // Check if initiative already exists (prevent duplicate initiatives)
-    let initiative = objective.initiatives.find(i => i.id === item.initiative_id);
-    if (!initiative) {
-      // Skip if this initiative was already processed in another objective
-      if (processedInitiatives.has(item.initiative_id)) {
-        console.warn(`⚠️ Duplicate initiative ${item.initiative_id} "${item.initiative_name}" detected - skipping`);
-        return;
-      }
-
-      processedInitiatives.add(item.initiative_id);
-      initiative = {
-        id: item.initiative_id,
-        name: item.initiative_name,
-        weight: item.initiative_weight,
-        performance_measures: [],
-        main_activities: []
-      };
-      objective.initiatives.push(initiative);
-    }
-
-    // Add performance measures (avoid duplicates globally)
-    item.performance_measures.forEach(measure => {
-      if (!globalMeasureIds.has(measure.id)) {
-        globalMeasureIds.add(measure.id);
-        initiative!.performance_measures.push(measure);
-      } else {
-        console.warn(`⚠️ Duplicate measure ${measure.id} "${measure.name}" detected - skipping (already in another initiative)`);
-      }
-    });
-
-    // Add main activities (avoid duplicates globally)
-    item.main_activities.forEach(activity => {
-      // Check if this activity has already been added to ANY initiative
-      if (!globalActivityIds.has(activity.id)) {
-        globalActivityIds.add(activity.id);
-        initiative!.main_activities.push(activity);
-      } else {
-        console.warn(`⚠️ Duplicate activity ${activity.id} "${activity.name}" detected - skipping (already in another initiative)`);
-      }
-    });
-  });
-
-  // Log summary
-  console.log(`✓ Grouped plan data: ${objectivesMap.size} objectives, ${processedInitiatives.size} unique initiatives, ${globalMeasureIds.size} unique measures, ${globalActivityIds.size} unique activities`);
-
-  return Array.from(objectivesMap.values());
-};
+// No longer needed - backend returns properly structured hierarchical data
 
 const Reporting: React.FC = () => {
   const navigate = useNavigate();
@@ -152,39 +73,15 @@ const Reporting: React.FC = () => {
       console.log('Plan data array:', response.data.plan_data);
       console.log('Plan data length:', response.data.plan_data?.length);
       console.log('Plan data type:', typeof response.data.plan_data);
-      console.log('Is array?', Array.isArray(response.data.plan_data));
+      console.log('Objectives data:', response.data.objectives);
+      console.log('Is array?', Array.isArray(response.data.objectives));
 
-      // If no plan data, fetch debug info
-      if (!response.data.plan_data || response.data.plan_data.length === 0) {
-        console.log('No plan data found, fetching debug info...');
+      // If no objectives data, fetch debug info
+      if (!response.data.objectives || response.data.objectives.length === 0) {
+        console.log('No objectives data found, fetching debug info...');
         try {
           const debugResponse = await api.get(`/reports/${reportId}/debug_plan_structure/`);
           console.log('DEBUG - Plan structure:', JSON.stringify(debugResponse.data, null, 2));
-
-          // Log specific details
-          if (debugResponse.data.objectives) {
-            console.log('Objectives count:', debugResponse.data.objectives.length);
-            debugResponse.data.objectives.forEach((obj: any, idx: number) => {
-              console.log(`\nObjective ${idx + 1}: ${obj.title}`);
-              console.log(`  Initiatives count: ${obj.initiatives?.length || 0}`);
-              obj.initiatives?.forEach((init: any) => {
-                console.log(`    Initiative: ${init.name}`);
-                console.log(`      Organization: ${init.organization}`);
-                console.log(`      Measures: ${init.measures?.length || 0}`);
-                console.log(`      Activities: ${init.activities?.length || 0}`);
-
-                init.measures?.forEach((m: any) => {
-                  console.log(`        Measure: ${m.name}, Type: ${m.target_type}, Org: ${m.organization}`);
-                  console.log(`          Targets: Q1=${m.q1_target}, Q2=${m.q2_target}, Q3=${m.q3_target}, Q4=${m.q4_target}, Annual=${m.annual_target}`);
-                });
-
-                init.activities?.forEach((a: any) => {
-                  console.log(`        Activity: ${a.name}, Type: ${a.target_type}, Org: ${a.organization}`);
-                  console.log(`          Targets: Q1=${a.q1_target}, Q2=${a.q2_target}, Q3=${a.q3_target}, Q4=${a.q4_target}, Annual=${a.annual_target}`);
-                });
-              });
-            });
-          }
         } catch (debugError) {
           console.error('Failed to fetch debug info:', debugError);
         }
@@ -196,12 +93,14 @@ const Reporting: React.FC = () => {
     retry: 1
   });
 
-  // Group plan data by objective and initiative
+  // Use hierarchical data directly (no need to group)
   const groupedPlanData = useMemo(() => {
-    if (!planData?.plan_data || planData.plan_data.length === 0) {
+    if (!planData?.objectives || planData.objectives.length === 0) {
       return [];
     }
-    return groupPlanData(planData.plan_data);
+    // Data is already properly structured from backend
+    console.log('✓ Using hierarchical objectives data:', planData.objectives);
+    return planData.objectives;
   }, [planData]);
 
   // Log whenever query conditions change
@@ -670,7 +569,7 @@ const Reporting: React.FC = () => {
   };
 
   const getMEReportData = () => {
-    if (!planData?.plan_data || !existingAchievements) {
+    if (!planData?.objectives || !existingAchievements) {
       console.log('getMEReportData: Missing data', { planData, existingAchievements });
       return [];
     }
@@ -681,45 +580,12 @@ const Reporting: React.FC = () => {
     }
 
     console.log('getMEReportData: budgetUtilizations state:', budgetUtilizations);
-    console.log('getMEReportData: plan_data:', planData.plan_data);
+    console.log('getMEReportData: objectives:', planData.objectives);
 
-    const objectivesMap = new Map();
-
-    // Track processed items to prevent duplicates
-    const processedInitiatives = new Set<number>();
-    const processedMeasures = new Set<number>();
-    const processedActivities = new Set<number>();
-
-    planData.plan_data.forEach((initiative: ReportPlanData) => {
-      // Skip duplicate initiatives
-      if (processedInitiatives.has(initiative.initiative_id)) {
-        console.warn(`⚠️ ME Report: Skipping duplicate initiative ${initiative.initiative_id}`);
-        return;
-      }
-      processedInitiatives.add(initiative.initiative_id);
-
-      if (!objectivesMap.has(initiative.objective_id)) {
-        objectivesMap.set(initiative.objective_id, {
-          id: initiative.objective_id,
-          title: initiative.objective_title,
-          weight: initiative.objective_weight,
-          initiatives: []
-        });
-      }
-
-      const objective = objectivesMap.get(initiative.objective_id);
-
-      // Filter out duplicate measures
-      const performanceMeasures = initiative.performance_measures
-        .filter(measure => {
-          if (processedMeasures.has(measure.id)) {
-            console.warn(`⚠️ ME Report: Skipping duplicate measure ${measure.id}`);
-            return false;
-          }
-          processedMeasures.add(measure.id);
-          return true;
-        })
-        .map(measure => {
+    // Transform hierarchical data to ME report format with achievements
+    return planData.objectives.map(objective => {
+      const initiativesWithAchievements = objective.initiatives.map(initiative => {
+        const performanceMeasures = initiative.performance_measures.map(measure => {
           const achievement = existingAchievements.performance.find(
             (a: any) => a.performance_measure === measure.id
           );
@@ -733,17 +599,7 @@ const Reporting: React.FC = () => {
           };
         });
 
-      // Filter out duplicate activities
-      const mainActivities = initiative.main_activities
-        .filter(activity => {
-          if (processedActivities.has(activity.id)) {
-            console.warn(`⚠️ ME Report: Skipping duplicate activity ${activity.id}`);
-            return false;
-          }
-          processedActivities.add(activity.id);
-          return true;
-        })
-        .map(activity => {
+        const mainActivities = initiative.main_activities.map(activity => {
           const achievement = existingAchievements.activities.find(
             (a: any) => a.main_activity === activity.id
           );
@@ -794,18 +650,22 @@ const Reporting: React.FC = () => {
           };
         });
 
-      objective.initiatives.push({
-        id: initiative.initiative_id,
-        name: initiative.initiative_name,
-        weight: initiative.initiative_weight,
-        performanceMeasures,
-        mainActivities
+        return {
+          id: initiative.id,
+          name: initiative.name,
+          weight: initiative.weight,
+          performanceMeasures,
+          mainActivities
+        };
       });
+
+      return {
+        id: objective.id,
+        title: objective.title,
+        weight: objective.weight,
+        initiatives: initiativesWithAchievements
+      };
     });
-
-    console.log(`✓ ME Report: ${objectivesMap.size} objectives, ${processedInitiatives.size} unique initiatives, ${processedMeasures.size} unique measures, ${processedActivities.size} unique activities`);
-
-    return Array.from(objectivesMap.values());
   };
 
   if (!planId) {
