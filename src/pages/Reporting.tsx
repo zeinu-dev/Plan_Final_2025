@@ -70,10 +70,9 @@ const Reporting: React.FC = () => {
 
       const response = await api.get(`/reports/${reportId}/plan_data/`);
       console.log('Plan data response:', response.data);
-      console.log('Plan data array:', response.data.plan_data);
-      console.log('Plan data length:', response.data.plan_data?.length);
-      console.log('Plan data type:', typeof response.data.plan_data);
       console.log('Objectives data:', response.data.objectives);
+      console.log('Objectives length:', response.data.objectives?.length);
+      console.log('Objectives type:', typeof response.data.objectives);
       console.log('Is array?', Array.isArray(response.data.objectives));
 
       // If no objectives data, fetch debug info
@@ -834,8 +833,8 @@ const Reporting: React.FC = () => {
             console.log('=== RENDERING STEP 2 ===');
             console.log('isLoadingPlan:', isLoadingPlan);
             console.log('planData:', planData);
-            console.log('planData?.plan_data:', planData?.plan_data);
-            console.log('planData?.plan_data?.length:', planData?.plan_data?.length);
+            console.log('planData?.objectives:', planData?.objectives);
+            console.log('planData?.objectives?.length:', planData?.objectives?.length);
             return null;
           })()}
 
@@ -844,7 +843,7 @@ const Reporting: React.FC = () => {
               <Loader className="h-6 w-6 animate-spin mr-2" />
               <span>Loading plan data...</span>
             </div>
-          ) : !planData?.plan_data || planData.plan_data.length === 0 ? (
+          ) : !planData?.objectives || planData.objectives.length === 0 ? (
             <div className="text-center py-12 bg-yellow-50 rounded-lg border border-yellow-200">
               <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No Plan Data Found</h3>
