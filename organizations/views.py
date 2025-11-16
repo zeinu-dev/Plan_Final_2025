@@ -2726,6 +2726,10 @@ class ReportViewSet(viewsets.ModelViewSet):
         Get the target value for a specific reporting period.
         Filters based on selected_quarters/selected_months and returns appropriate target.
         Returns None if the activity/measure is not planned for this reporting period.
+
+        CRITICAL: This function enforces STRICT quarter isolation.
+        Q1 report should ONLY show items with Q1 in selected_quarters.
+        Q2 report should ONLY show items with Q2 in selected_quarters.
         """
         # Get selected periods - handle None, null, or empty arrays
         selected_quarters = obj.selected_quarters if hasattr(obj, 'selected_quarters') and obj.selected_quarters else []
@@ -2737,10 +2741,14 @@ class ReportViewSet(viewsets.ModelViewSet):
         if not isinstance(selected_months, list):
             selected_months = []
 
+        logger.info(f"🔍 Checking {obj.__class__.__name__} ID {obj.id} '{obj.name}' for {report_type}")
+        logger.info(f"   Selected quarters: {selected_quarters}")
+        logger.info(f"   Selected months: {selected_months}")
+
         # If both quarters and months are empty, this activity/measure has no period selection
         # which means it should not appear in any quarterly reports (invalid data)
         if not selected_quarters and not selected_months:
-            logger.warning(f"Activity/Measure {obj.id} has no selected quarters or months - skipping")
+            logger.warning(f"❌ Activity/Measure {obj.id} has no selected quarters or months - SKIPPING")
             return None
 
         # Map report types to quarters
@@ -2778,8 +2786,10 @@ class ReportViewSet(viewsets.ModelViewSet):
 
         # If not planned for this period, return None
         if not has_matching_quarter and not has_matching_month:
-            logger.debug(f"Activity/Measure {obj.id} not planned for {report_type}. Selected: Q={selected_quarters}, M={selected_months}")
+            logger.debug(f"Activity/Measure {obj.id} '{obj.name}' not planned for {report_type}. Selected: Q={selected_quarters}, M={selected_months}")
             return None
+
+        logger.info(f"Activity/Measure {obj.id} '{obj.name}' IS planned for {report_type}. Selected: Q={selected_quarters}, M={selected_months}")
 
         # Check if quarterly targets are defined (non-zero)
         has_quarterly = any([
@@ -2790,30 +2800,50 @@ class ReportViewSet(viewsets.ModelViewSet):
         ])
 
         if has_quarterly:
-            # Use quarterly targets
+            # Use quarterly targets - validated period selection already done above
             if report_type == 'Q1':
-                return obj.q1_target if obj.q1_target else None
+                target = obj.q1_target if obj.q1_target and obj.q1_target > 0 else None
+                logger.info(f"   ✓ Q1 target: {target}")
+                return target
+
             elif report_type == 'Q2':
-                return obj.q2_target if obj.q2_target else None
+                target = obj.q2_target if obj.q2_target and obj.q2_target > 0 else None
+                logger.info(f"   ✓ Q2 target: {target}")
+                return target
+
             elif report_type == '6M':
                 q1 = obj.q1_target if obj.q1_target else 0
                 q2 = obj.q2_target if obj.q2_target else 0
-                return q1 + q2 if (q1 or q2) else None
+                total = q1 + q2 if (q1 or q2) else None
+                logger.info(f"   ✓ 6M target: {total} (Q1:{q1} + Q2:{q2})")
+                return total
+
             elif report_type == 'Q3':
-                return obj.q3_target if obj.q3_target else None
+                target = obj.q3_target if obj.q3_target and obj.q3_target > 0 else None
+                logger.info(f"   ✓ Q3 target: {target}")
+                return target
+
             elif report_type == '9M':
                 q1 = obj.q1_target if obj.q1_target else 0
                 q2 = obj.q2_target if obj.q2_target else 0
                 q3 = obj.q3_target if obj.q3_target else 0
-                return q1 + q2 + q3 if (q1 or q2 or q3) else None
+                total = q1 + q2 + q3 if (q1 or q2 or q3) else None
+                logger.info(f"   ✓ 9M target: {total} (Q1:{q1} + Q2:{q2} + Q3:{q3})")
+                return total
+
             elif report_type == 'Q4':
-                return obj.q4_target if obj.q4_target else None
+                target = obj.q4_target if obj.q4_target and obj.q4_target > 0 else None
+                logger.info(f"   ✓ Q4 target: {target}")
+                return target
+
             elif report_type == 'YEARLY':
                 q1 = obj.q1_target if obj.q1_target else 0
                 q2 = obj.q2_target if obj.q2_target else 0
                 q3 = obj.q3_target if obj.q3_target else 0
                 q4 = obj.q4_target if obj.q4_target else 0
-                return q1 + q2 + q3 + q4 if (q1 or q2 or q3 or q4) else None
+                total = q1 + q2 + q3 + q4 if (q1 or q2 or q3 or q4) else None
+                logger.info(f"   ✓ Yearly target: {total} (Q1:{q1} + Q2:{q2} + Q3:{q3} + Q4:{q4})")
+                return total
         else:
             # Fall back to annual target and divide by period
             annual = obj.annual_target if hasattr(obj, 'annual_target') and obj.annual_target else None
